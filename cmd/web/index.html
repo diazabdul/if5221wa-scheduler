@@ -137,6 +137,16 @@
       .flatpickr-calendar { font-family: Inter, system-ui, sans-serif; border-radius: 12px; box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.18); }
       .flatpickr-wrapper { display: block; width: 100%; }
       .flatpickr-calendar.static { top: calc(100% + 4px); z-index: 10; }
+      @media (max-width: 640px) {
+        .flatpickr-calendar.static.open {
+          position: fixed;
+          top: auto !important;
+          left: 50% !important;
+          bottom: calc(88px + env(safe-area-inset-bottom));
+          transform: translateX(-50%);
+          z-index: 60;
+        }
+      }
       .flatpickr-day.selected, .flatpickr-day.selected:hover { background: #0f7b6c; border-color: #0f7b6c; }
       .flatpickr-day.today { border-color: #0f7b6c; }
       .flatpickr-day.today:hover { background: #e6f4f1; color: #0f7b6c; }
@@ -365,7 +375,7 @@
                 failed because the publisher's WhatsApp session expired. Re-link WhatsApp on the publisher, then retry them here.
               </p>
             </div>
-            <button type="button" class="btn btn-sm btn-secondary" @click="setStatus('failed')">Show failed</button>
+            <button type="button" class="btn btn-sm btn-secondary max-md:h-10 max-md:w-full" @click="setStatus('failed')">Show failed</button>
           </div>
 
           <!-- Stats -->
@@ -420,7 +430,7 @@
                   <button
                     type="button"
                     role="tab"
-                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-9 max-md:flex-1 max-md:shrink-0 max-md:justify-center max-md:gap-1.5 max-md:px-2"
+                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-9 max-md:flex-1 max-md:shrink-0 max-md:justify-center max-md:gap-1 max-md:px-1.5"
                     :class="status === tab.value ? 'border-line bg-surface font-semibold text-ink' : 'border-transparent font-medium text-ink-secondary hover:text-ink'"
                     :aria-selected="status === tab.value"
                     @click="setStatus(tab.value)"
@@ -1788,6 +1798,7 @@
             if (!fp.input.value) fp.setDate(toJakartaInput(nowTs() + 5 * 60), true);
           },
           onChange(_, dateStr) { onChange(dateStr); },
+          onClose: notePickerClosed,
         });
       }
 
@@ -1985,6 +1996,8 @@
       let composerTimePicker = null;
       let retryPicker = null;
       let draftTimer = null;
+      let pickerClosedAt = 0;
+      const notePickerClosed = () => (pickerClosedAt = Date.now());
       let confirmResolve = null;
 
       /* =====================================================================
@@ -2103,6 +2116,7 @@
                 minDate: jktTodayLocal(),
                 onOpen: (_, __, fp) => fp.set("minDate", jktTodayLocal()),
                 onChange: (dates) => this.onComposerDate(dates[0]),
+                onClose: notePickerClosed,
               });
               composerTimePicker = flatpickr("#composerTime", {
                 enableTime: true,
@@ -2115,6 +2129,7 @@
                 static: true,
                 disableMobile: true,
                 onChange: (_, str) => this.onComposerTime(str),
+                onClose: notePickerClosed,
               });
               retryPicker = initDatePicker(document.getElementById("retryTime"), (v) => (this.retry.time = v));
             });
@@ -2246,7 +2261,7 @@
           onKey(e) {
             if (!this.authed) return;
             if (e.key === "Escape") {
-              if (document.querySelector(".flatpickr-calendar.open")) return;
+              if (document.querySelector(".flatpickr-calendar.open") || Date.now() - pickerClosedAt < 300) return;
               if (this.confirm.open) this.resolveConfirm(false);
               else if (this.drawerOpen) this.drawerOpen = false;
               else if (this.templateMenuOpen) this.templateMenuOpen = false;
@@ -2866,12 +2881,12 @@
             }));
             for (const jid of this.defaultNumbers) {
               if (!this.contacts.some((c) => c.jid === jid)) {
-                out.push({ key: "d:" + jid, jid, title: this.displayRecipient(jid), subtitle: this.subtitleFor(jid), favorite: false, tag: "Default" });
+                out.push({ key: "d:" + jid, jid, title: this.displayRecipient(jid), subtitle: isGroup(jid) ? jid : "Default number", favorite: false, tag: "Default" });
               }
             }
             for (const jid of this.recentRecipients()) {
               if (!out.some((e) => e.jid === jid)) {
-                out.push({ key: "r:" + jid, jid, title: this.displayRecipient(jid), subtitle: this.subtitleFor(jid), favorite: false, tag: "Recent" });
+                out.push({ key: "r:" + jid, jid, title: this.displayRecipient(jid), subtitle: isGroup(jid) ? jid : "Recent recipient", favorite: false, tag: "Recent" });
               }
             }
             return out.sort((a, b) => b.favorite - a.favorite || a.title.localeCompare(b.title));
