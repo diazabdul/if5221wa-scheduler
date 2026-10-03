@@ -466,15 +466,15 @@
                         </span>
                       </td>
                       <td class="px-2 py-4">
-                        <p class="truncate text-body text-ink" x-text="oneLine(m.content)" :title="m.content"></p>
+                        <p class="truncate text-body text-ink" x-text="oneLine(plainWhatsApp(m.content))" :title="m.content"></p>
                         <p x-show="m.status === 'failed'" class="mt-1 truncate text-caption font-semibold text-failed-fg" x-text="failureLine(m)" :title="m.reason || ''"></p>
                         <p x-show="m.status !== 'failed' && m.retried_count > 0" class="mt-1 text-caption text-ink-muted" x-text="capitalize(retriedLabel(m.retried_count))"></p>
                       </td>
                       <td class="px-2 py-4">
-                        <div class="flex min-w-0 items-center gap-2" :title="m.recipient_numbers.map(displayRecipient).join(', ')">
+                        <div class="flex min-w-0 items-center gap-2" :title="m.recipient_numbers.map((r) => displayRecipient(r)).join(', ')">
                           <span class="avatar size-6 text-count">
-                            <span x-show="isGroup(m.recipient_numbers[0])" x-html="icon('users', 12)"></span>
-                            <span x-show="!isGroup(m.recipient_numbers[0])" x-text="initialOf(displayRecipient(m.recipient_numbers[0]))"></span>
+                            <span x-show="avatarIcon(m.recipient_numbers[0])" x-html="icon(avatarIcon(m.recipient_numbers[0]), 12)"></span>
+                            <span x-show="!avatarIcon(m.recipient_numbers[0])" x-text="initialOf(displayRecipient(m.recipient_numbers[0]))"></span>
                           </span>
                           <span class="truncate text-small text-ink-secondary" x-text="displayRecipient(m.recipient_numbers[0])"></span>
                           <span class="count h-[18px] px-1.5" x-show="m.recipient_numbers.length > 1" x-text="'+' + (m.recipient_numbers.length - 1)"></span>
@@ -880,7 +880,7 @@
               <div>
                 <p class="text-caption text-ink-muted">To</p>
                 <p class="text-small font-medium" x-text="composer.recipients.length ? plural(composer.recipients.length, 'recipient', 'recipients') : 'No recipients yet'"></p>
-                <p x-show="composer.recipients.length" class="line-clamp-2 text-caption text-ink-muted" x-text="composer.recipients.map(displayRecipient).join(', ')"></p>
+                <p x-show="composer.recipients.length" class="line-clamp-2 text-caption text-ink-muted" x-text="composer.recipients.map((r) => displayRecipient(r)).join(', ')"></p>
               </div>
               <div>
                 <p class="text-caption text-ink-muted">Sends</p>
@@ -1359,6 +1359,13 @@
           .join("");
       }
 
+      // Markup-free text for one-line list cells.
+      function plainWhatsApp(text) {
+        let t = String(text ?? "").replace(/```([\s\S]*?)```/g, "$1").replace(/`([^`\n]+)`/g, "$1");
+        for (const [re] of WA_INLINE) t = t.replace(re, "$1$2");
+        return t.replace(/^> ?/gm, "").replace(/^[-*] /gm, "• ");
+      }
+
       function renderWhatsApp(text) {
         const safe = escapeHtml(String(text ?? "").replace(/\u0000/g, ""));
         return safe
@@ -1808,6 +1815,7 @@
           failureLabel,
           retriedLabel,
           renderWhatsApp,
+          plainWhatsApp,
 
           rel(ts) {
             return fmtRelative(ts, this.now);
@@ -1829,6 +1837,12 @@
           },
           failureLine(m) {
             return [failureLabel(m.reason), retriedLabel(m.retried_count)].filter(Boolean).join(" · ");
+          },
+          // Group icon for groups, person icon until the contact has a real name.
+          avatarIcon(jid) {
+            if (isGroup(jid)) return "users";
+            const c = this.contacts.find((x) => x.jid === jid);
+            return c?.name && !/^\+?\d/.test(c.name) ? "" : "user";
           },
           displayRecipient(jid) {
             if (!jid) return "";
