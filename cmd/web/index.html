@@ -111,7 +111,7 @@
         .modal-scrim { @apply fixed inset-0 z-40 flex justify-center overflow-y-auto p-4 bg-scrim/50; }
         .modal { @apply my-auto flex flex-col w-full bg-surface rounded-2xl shadow-modal; }
         .modal-header { @apply flex items-center justify-between gap-4 px-6 py-4 border-b border-line; }
-        .modal-footer { @apply flex items-center justify-end gap-3 px-6 py-4 border-t border-line; }
+        .modal-footer { @apply flex flex-wrap items-center justify-end gap-3 px-6 py-4 border-t border-line; }
 
         /* Badges, chips, counts, avatars */
         .badge { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold whitespace-nowrap; }
@@ -161,6 +161,9 @@
         --button-active-background: #e6f4f1;
         --num-columns: 8;
         height: 320px;
+      }
+      @media (max-width: 640px) {
+        emoji-picker { width: 100%; --num-columns: 7; }
       }
     </style>
   </head>
@@ -222,9 +225,13 @@
          TEMPLATE: App shell
          =================================================================== -->
     <div x-show="!booting && authed" x-cloak class="min-h-screen lg:flex">
-      <!-- Sidebar (Large) -->
+      <!-- Drawer scrim (below Large) -->
+      <div x-show="drawerOpen" x-transition.opacity class="fixed inset-0 z-40 bg-scrim/50 lg:hidden" @click="drawerOpen = false"></div>
+
+      <!-- Sidebar (Large) / slide-in drawer (below Large) -->
       <aside
-        class="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[240px] lg:shrink-0 lg:flex-col lg:justify-between lg:border-r lg:border-line lg:bg-surface"
+        class="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[240px] lg:shrink-0 lg:flex-col lg:justify-between lg:border-r lg:border-line lg:bg-surface max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-[280px] max-lg:flex-col max-lg:justify-between max-lg:overflow-y-auto max-lg:bg-surface max-lg:shadow-modal"
+        :class="drawerOpen ? 'max-lg:flex' : ''"
       >
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2.5 p-5">
@@ -238,6 +245,7 @@
                 class="flex h-10 items-center gap-3 rounded-lg px-3 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 :class="route === item.route ? 'bg-brand-soft font-semibold text-brand' : 'font-medium text-ink-secondary hover:bg-page hover:text-ink'"
                 :aria-current="route === item.route ? 'page' : null"
+                @click="drawerOpen = false"
               >
                 <span x-html="icon(item.icon, 18)"></span>
                 <span class="flex-1" x-text="item.label"></span>
@@ -268,28 +276,54 @@
         </div>
       </aside>
 
-      <!-- Minimal top bar below Large (replaced in Phase 2 / 3) -->
-      <header class="flex items-center justify-between gap-2 border-b border-line bg-surface px-4 py-3 lg:hidden">
-        <div class="flex items-center gap-2">
-          <span class="flex size-8 items-center justify-center rounded-lg bg-brand text-white" x-html="icon('send', 16)"></span>
-          <span class="font-semibold">WA Scheduler</span>
-        </div>
-        <nav class="flex items-center gap-1" aria-label="Main">
-          <template x-for="item in navItems" :key="item.route">
-            <a
-              :href="'#/' + item.route"
-              class="btn-icon size-10"
-              :class="route === item.route ? 'bg-brand-soft text-brand' : ''"
-              :aria-label="item.label"
-              :aria-current="route === item.route ? 'page' : null"
-              x-html="icon(item.icon, 18)"
-            ></a>
-          </template>
-          <button type="button" class="btn-icon size-10" @click="logout()" aria-label="Log out">
-            <span x-html="icon('log-out', 18)"></span>
-          </button>
-        </nav>
+      <!-- App bar (below Large) — Figma "Messages — Mobile" -->
+      <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 lg:hidden">
+        <button type="button" class="btn-icon -ml-2 size-10" @click="drawerOpen = true" aria-label="Open menu" :aria-expanded="drawerOpen">
+          <span x-html="icon('menu', 24)"></span>
+        </button>
+        <h1 class="min-w-0 flex-1 truncate text-card-title font-semibold" x-text="routeLabel()"></h1>
+        <button
+          type="button"
+          x-show="route === 'messages'"
+          class="btn-icon size-10"
+          @click="refresh()"
+          :disabled="loading"
+          aria-label="Refresh messages"
+        >
+          <span :class="loading ? 'animate-spin' : ''" x-html="icon('refresh-cw', 20)"></span>
+        </button>
+        <button type="button" class="btn-icon -mr-2 size-10" @click="toggleMobileSearch()" :aria-label="mobileSearch ? 'Hide search' : 'Search'" :aria-pressed="mobileSearch">
+          <span x-html="icon(mobileSearch ? 'x' : 'search', 24)"></span>
+        </button>
       </header>
+
+      <!-- Bottom tab bar (below Large) -->
+      <nav
+        class="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pt-2 pb-[max(8px,env(safe-area-inset-bottom))] lg:hidden"
+        aria-label="Main"
+      >
+        <template x-for="item in mobileNavItems" :key="item.route">
+          <a
+            :href="'#/' + item.route"
+            class="flex min-h-[50px] flex-1 flex-col items-center justify-center gap-0.5 py-1 text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+            :class="route === item.route ? 'text-brand' : 'text-ink-muted'"
+            :aria-current="route === item.route ? 'page' : null"
+          >
+            <span x-html="icon(item.icon, 24)"></span>
+            <span x-text="item.label"></span>
+          </a>
+        </template>
+      </nav>
+
+      <!-- Floating action button (below Large) -->
+      <button
+        type="button"
+        class="fixed bottom-[84px] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-brand text-white shadow-dropdown transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 lg:hidden"
+        @click="fabAction()"
+        :aria-label="fabLabel()"
+      >
+        <span x-html="icon('plus', 24)"></span>
+      </button>
 
       <div class="min-w-0 flex-1">
         <!-- =============================================================
@@ -297,10 +331,10 @@
              ============================================================= -->
         <section
           x-show="route === 'messages'"
-          class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8"
+          class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8 max-lg:pb-28 max-md:gap-3 max-md:pt-4"
         >
           <!-- Page header -->
-          <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex flex-wrap items-center justify-between gap-4 max-md:hidden">
             <div>
               <h1 class="text-display font-bold">Messages</h1>
               <p class="mt-1 text-body text-ink-muted">Everything you have scheduled, sent, or that needs another try.</p>
@@ -335,7 +369,7 @@
           </div>
 
           <!-- Stats -->
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 max-md:hidden">
             <div class="card flex items-center gap-3.5 px-5 py-[18px]">
               <span class="flex size-11 shrink-0 items-center justify-center rounded-10 bg-scheduled-bg text-scheduled-fg" x-html="icon('clock', 22)"></span>
               <div class="min-w-0">
@@ -378,15 +412,15 @@
           </div>
 
           <!-- Messages card -->
-          <div class="card overflow-hidden">
+          <div class="card overflow-hidden max-md:overflow-visible max-md:rounded-none max-md:border-0 max-md:bg-transparent">
             <!-- Toolbar -->
-            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-              <div class="flex gap-0.5 rounded-10 bg-page p-[3px]" role="tablist" aria-label="Filter by status">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 max-md:px-0 max-md:pb-3 max-md:pt-0">
+              <div class="flex gap-0.5 rounded-10 bg-page p-[3px] max-md:w-full max-md:gap-1 max-md:overflow-x-auto max-md:bg-subtle max-md:p-1" role="tablist" aria-label="Filter by status">
                 <template x-for="tab in statusTabs" :key="tab.value">
                   <button
                     type="button"
                     role="tab"
-                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-9 max-md:flex-1 max-md:shrink-0 max-md:justify-center max-md:gap-1.5 max-md:px-2"
                     :class="status === tab.value ? 'border-line bg-surface font-semibold text-ink' : 'border-transparent font-medium text-ink-secondary hover:text-ink'"
                     :aria-selected="status === tab.value"
                     @click="setStatus(tab.value)"
@@ -402,29 +436,71 @@
                 </template>
               </div>
 
-              <div class="flex flex-wrap items-center gap-2.5">
-                <label class="relative block w-full md:w-[280px]">
+              <div class="flex flex-wrap items-center gap-2.5 max-md:w-full">
+                <label class="relative block w-full md:w-[280px]" :class="mobileSearch ? '' : 'max-md:hidden'">
                   <span class="sr-only">Search messages</span>
                   <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 16)"></span>
                   <input
                     type="search"
                     x-ref="search"
-                    class="input h-9 pl-9 text-small"
+                    class="input h-9 pl-9 text-small max-md:h-12 max-md:text-body"
                     placeholder="Search message or recipient"
                     x-model="search"
                     @input="page = 1"
                     aria-keyshortcuts="/"
                   />
                 </label>
-                <button type="button" class="btn btn-secondary h-9 px-3 text-small font-medium" @click="refresh()" :disabled="loading">
+                <button type="button" class="btn btn-secondary h-9 px-3 text-small font-medium max-md:hidden" @click="refresh()" :disabled="loading">
                   <span :class="loading ? 'animate-spin' : ''" x-html="icon('refresh-cw', 16)"></span>
                   Refresh
                 </button>
               </div>
             </div>
 
+            <!-- Small: message cards — Figma "Message card" -->
+            <div class="flex flex-col gap-3 md:hidden">
+              <template x-if="loading && list.length === 0">
+                <div class="flex flex-col gap-3">
+                  <template x-for="i in 4" :key="i">
+                    <div class="flex flex-col gap-2.5 rounded-xl border border-line bg-surface px-4 py-3.5">
+                      <div class="flex justify-between"><div class="skeleton h-6 w-20 rounded-full"></div><div class="skeleton h-3.5 w-16"></div></div>
+                      <div class="skeleton h-4 w-11/12"></div>
+                      <div class="skeleton h-3 w-28"></div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <template x-if="!(loading && list.length === 0) && !loadError">
+                <div class="flex flex-col gap-3">
+                  <template x-for="m in paged()" :key="m.id">
+                    <button
+                      type="button"
+                      class="flex w-full flex-col items-start gap-2 rounded-xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      :class="m.status === 'failed' ? 'border-failed-fg/20 bg-failed-bg/60' : 'border-line bg-surface active:bg-subtle'"
+                      @click="m.status === 'failed' ? openRetry(m) : openDetail(m)"
+                    >
+                      <span class="flex w-full items-center justify-between gap-2">
+                        <span class="badge" :class="badgeClass(m.status)">
+                          <span class="badge-dot"></span>
+                          <span x-text="statusLabel(m.status)"></span>
+                        </span>
+                        <span class="text-caption text-ink-secondary" x-text="fmtWhen(sendTimeOf(m))"></span>
+                      </span>
+                      <span class="line-clamp-2 text-body text-ink" x-text="oneLine(plainWhatsApp(m.content))"></span>
+                      <span class="flex min-w-0 max-w-full items-center gap-1.5 text-caption text-ink-secondary">
+                        <span class="shrink-0" x-html="icon(m.recipient_numbers.length > 1 || isGroup(m.recipient_numbers[0]) ? 'users' : 'user', 16)"></span>
+                        <span class="truncate" x-text="recipientSummary(m)"></span>
+                      </span>
+                      <span x-show="m.status === 'failed'" class="text-caption font-semibold text-failed-fg" x-text="'Failed: ' + failureLine(m) + '. Tap to retry.'"></span>
+                      <span x-show="m.status !== 'failed' && m.retried_count > 0" class="text-caption text-ink-muted" x-text="capitalize(retriedLabel(m.retried_count))"></span>
+                    </button>
+                  </template>
+                </div>
+              </template>
+            </div>
+
             <!-- Table -->
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto max-md:hidden">
               <table class="w-full min-w-[900px] table-fixed border-t border-line text-left">
                 <thead class="bg-subtle">
                   <tr class="border-b border-line text-caption font-semibold text-ink-muted">
@@ -514,7 +590,7 @@
             </div>
 
             <!-- Error state -->
-            <div x-show="loadError && !loading" class="flex flex-col items-center gap-3 px-6 py-14 text-center">
+            <div x-show="loadError && !loading" class="flex flex-col items-center gap-3 px-6 py-14 text-center max-md:rounded-xl max-md:border max-md:border-line max-md:bg-surface">
               <span class="flex size-11 items-center justify-center rounded-full bg-failed-bg text-failed-fg" x-html="icon('alert-circle', 22)"></span>
               <p class="max-w-md text-body text-ink-secondary">
                 Couldn't load messages: <span x-text="loadError"></span>
@@ -528,7 +604,7 @@
             <!-- Empty state -->
             <div
               x-show="!loading && !loadError && loadedOnce && filtered().length === 0"
-              class="flex flex-col items-center gap-3 px-6 py-14 text-center"
+              class="flex flex-col items-center gap-3 px-6 py-14 text-center max-md:rounded-xl max-md:border max-md:border-line max-md:bg-surface"
             >
               <span class="flex size-11 items-center justify-center rounded-full bg-page text-ink-muted" x-html="icon(search ? 'search' : 'inbox', 22)"></span>
               <p class="text-body text-ink-secondary" x-text="emptyText()"></p>
@@ -542,15 +618,15 @@
             <!-- Pagination -->
             <div
               x-show="!loadError && filtered().length > 0"
-              class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
+              class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 max-md:px-0"
             >
               <p class="text-small text-ink-muted" x-text="'Showing ' + rangeFrom() + '–' + rangeTo() + ' of ' + plural(filtered().length, 'message', 'messages')"></p>
               <div class="flex items-center gap-2.5">
-                <button type="button" class="btn-icon border border-line-strong" :disabled="page <= 1" @click="page--" aria-label="Previous page">
+                <button type="button" class="btn-icon border border-line-strong max-md:size-11" :disabled="page <= 1" @click="page--" aria-label="Previous page">
                   <span x-html="icon('chevron-left', 16)"></span>
                 </button>
                 <span class="text-small text-ink-secondary" x-text="'Page ' + page + ' of ' + pageCount()"></span>
-                <button type="button" class="btn-icon border border-line-strong" :disabled="page >= pageCount()" @click="page++" aria-label="Next page">
+                <button type="button" class="btn-icon border border-line-strong max-md:size-11" :disabled="page >= pageCount()" @click="page++" aria-label="Next page">
                   <span x-html="icon('chevron-right', 16)"></span>
                 </button>
               </div>
@@ -561,8 +637,8 @@
         <!-- =============================================================
              PAGE: Contacts (no Figma frame: built from Design System parts)
              ============================================================= -->
-        <section x-show="route === 'contacts'" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8">
-          <div class="flex flex-wrap items-center justify-between gap-4">
+        <section x-show="route === 'contacts'" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8 max-lg:pb-28 max-md:gap-3 max-md:pt-4">
+          <div class="flex flex-wrap items-center justify-between gap-4 max-md:hidden">
             <div>
               <h1 class="text-display font-bold">Contacts</h1>
               <p class="mt-1 text-body text-ink-muted">People and groups you send to. Saved in this browser only.</p>
@@ -575,12 +651,12 @@
 
           <div class="card overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-              <div class="flex gap-0.5 rounded-10 bg-page p-[3px]" role="tablist" aria-label="Filter contacts">
+              <div class="flex gap-0.5 rounded-10 bg-page p-[3px] max-md:w-full max-md:overflow-x-auto" role="tablist" aria-label="Filter contacts">
                 <template x-for="f in pickerFilters" :key="f.value">
                   <button
                     type="button"
                     role="tab"
-                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-9 max-md:shrink-0 max-md:px-3"
                     :class="contactFilter === f.value ? 'border-line bg-surface font-semibold text-ink' : 'border-transparent font-medium text-ink-secondary hover:text-ink'"
                     :aria-selected="contactFilter === f.value"
                     @click="contactFilter = f.value"
@@ -590,14 +666,45 @@
                   </button>
                 </template>
               </div>
-              <label class="relative block w-full md:w-[280px]">
+              <label class="relative block w-full md:w-[280px]" :class="mobileSearch ? '' : 'max-md:hidden'">
                 <span class="sr-only">Search contacts</span>
                 <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 16)"></span>
-                <input type="search" class="input h-9 pl-9 text-small" placeholder="Search name, number or group" x-model="contactSearch" />
+                <input type="search" x-ref="contactSearchInput" class="input h-9 pl-9 text-small max-md:h-12 max-md:text-body" placeholder="Search name, number or group" x-model="contactSearch" />
               </label>
             </div>
 
-            <div class="overflow-x-auto" x-show="filteredContacts().length">
+            <!-- Small: contact rows -->
+            <ul class="md:hidden" x-show="filteredContacts().length">
+              <template x-for="c in filteredContacts()" :key="c.id">
+                <li class="flex items-center gap-3 border-t border-line py-2 pl-4 pr-2">
+                  <span class="avatar size-9 text-small">
+                    <span x-show="avatarIcon(c.jid)" x-html="icon(avatarIcon(c.jid), 18)"></span>
+                    <span x-show="!avatarIcon(c.jid)" x-text="initialOf(c.name)"></span>
+                  </span>
+                  <button type="button" class="min-w-0 flex-1 py-1 text-left" @click="openContactForm(c)" :aria-label="'Edit ' + c.name">
+                    <span class="block truncate text-body font-semibold" x-text="c.name"></span>
+                    <span class="block truncate text-caption text-ink-secondary" x-text="subtitleFor(c.jid) + (c.group ? ' · ' + c.group : '')"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-icon size-11"
+                    :class="c.favorite ? 'text-brand' : 'text-line-strong'"
+                    @click="toggleFavorite(c.id)"
+                    :aria-label="(c.favorite ? 'Remove from favorites: ' : 'Add to favorites: ') + c.name"
+                    :aria-pressed="c.favorite"
+                    x-html="starIcon(c.favorite, 18)"
+                  ></button>
+                  <button type="button" class="btn-icon size-11" @click="messageContact(c)" :aria-label="'New message to ' + c.name">
+                    <span x-html="icon('send', 18)"></span>
+                  </button>
+                  <button type="button" class="btn-icon size-11 hover:bg-failed-bg hover:text-failed-fg" @click="deleteContact(c)" :aria-label="'Delete ' + c.name">
+                    <span x-html="icon('trash-2', 18)"></span>
+                  </button>
+                </li>
+              </template>
+            </ul>
+
+            <div class="overflow-x-auto max-md:hidden" x-show="filteredContacts().length">
               <table class="w-full min-w-[760px] table-fixed border-t border-line text-left">
                 <thead class="bg-subtle">
                   <tr class="border-b border-line text-caption font-semibold text-ink-muted">
@@ -669,8 +776,8 @@
         <!-- =============================================================
              PAGE: Templates (no Figma frame: built from Design System parts)
              ============================================================= -->
-        <section x-show="route === 'templates'" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8">
-          <div class="flex flex-wrap items-center justify-between gap-4">
+        <section x-show="route === 'templates'" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8 max-lg:pb-28 max-md:gap-3 max-md:pt-4">
+          <div class="flex flex-wrap items-center justify-between gap-4 max-md:hidden">
             <div>
               <h1 class="text-display font-bold">Templates</h1>
               <p class="mt-1 text-body text-ink-muted">Reusable messages you can insert while composing. Saved in this browser only.</p>
@@ -682,17 +789,17 @@
           </div>
 
           <div class="card overflow-hidden">
-            <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3.5">
-              <label class="relative block w-full md:w-[280px]">
+            <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3.5" :class="mobileSearch ? '' : 'max-md:hidden'">
+              <label class="relative block w-full md:w-[280px]" :class="mobileSearch ? '' : 'max-md:hidden'">
                 <span class="sr-only">Search templates</span>
                 <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 16)"></span>
-                <input type="search" class="input h-9 pl-9 text-small" placeholder="Search name or text" x-model="templateSearch" />
+                <input type="search" x-ref="templateSearchInput" class="input h-9 pl-9 text-small max-md:h-12 max-md:text-body" placeholder="Search name or text" x-model="templateSearch" />
               </label>
             </div>
 
             <ul x-show="filteredTemplates().length" class="border-t border-line">
               <template x-for="t in filteredTemplates()" :key="t.id">
-                <li class="flex items-center gap-4 border-b border-line px-5 py-4 transition-colors hover:bg-subtle">
+                <li class="flex items-center gap-4 border-b border-line px-5 py-4 transition-colors hover:bg-subtle max-md:gap-3 max-md:py-3 max-md:pl-4 max-md:pr-2">
                   <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand" x-html="icon('file-text', 16)"></span>
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-body font-semibold" x-text="t.name"></p>
@@ -700,14 +807,14 @@
                   </div>
                   <span class="hidden shrink-0 text-caption text-ink-muted md:inline" x-text="'Updated ' + fmtWhen(t.updatedAt || t.createdAt)"></span>
                   <div class="flex shrink-0 items-center gap-1">
-                    <button type="button" class="btn btn-sm btn-outline mr-1" @click="useTemplate(t)">
+                    <button type="button" class="btn btn-sm btn-outline mr-1 max-md:h-11" @click="useTemplate(t)">
                       <span x-html="icon('send', 14)"></span>
                       Use
                     </button>
-                    <button type="button" class="btn-icon" @click="openTemplateForm(t)" :aria-label="'Edit ' + t.name" title="Edit">
+                    <button type="button" class="btn-icon max-md:size-11" @click="openTemplateForm(t)" :aria-label="'Edit ' + t.name" title="Edit">
                       <span x-html="icon('edit-2', 16)"></span>
                     </button>
-                    <button type="button" class="btn-icon hover:bg-failed-bg hover:text-failed-fg" @click="deleteTemplate(t)" :aria-label="'Delete ' + t.name" title="Delete">
+                    <button type="button" class="btn-icon hover:bg-failed-bg hover:text-failed-fg max-md:size-11" @click="deleteTemplate(t)" :aria-label="'Delete ' + t.name" title="Delete">
                       <span x-html="icon('trash-2', 16)"></span>
                     </button>
                   </div>
@@ -734,9 +841,9 @@
     <!-- ===================================================================
          TEMPLATE: Composer (New message) — Figma "Modal / New message"
          =================================================================== -->
-    <div x-show="composer.open" x-cloak class="modal-scrim" @mousedown.self="closeComposer()" x-transition.opacity>
+    <div x-show="composer.open" x-cloak class="modal-scrim max-md:p-0" @mousedown.self="closeComposer()" x-transition.opacity>
       <div
-        class="modal max-w-[1080px]"
+        class="modal max-w-[1080px] max-md:my-0 max-md:min-h-[100dvh] max-md:rounded-none max-md:shadow-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="composerTitle"
@@ -744,7 +851,16 @@
         @keydown.ctrl.enter.prevent="submitComposer()"
         @keydown.meta.enter.prevent="submitComposer()"
       >
-        <div class="flex items-center justify-between gap-4 border-b border-line px-7 py-[18px]">
+        <!-- Small: app bar — Figma "New message — Mobile" -->
+        <div class="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 md:hidden">
+          <button type="button" class="btn-icon -ml-2 size-10" @click="closeComposer()" aria-label="Close">
+            <span x-html="icon('x', 24)"></span>
+          </button>
+          <p class="min-w-0 flex-1 truncate text-card-title font-semibold" aria-hidden="true">New message</p>
+          <span x-show="composer.savedAt" class="text-caption text-ink-muted">Draft saved</span>
+        </div>
+
+        <div class="flex items-center justify-between gap-4 border-b border-line px-7 py-[18px] max-md:hidden">
           <div class="flex items-center gap-3">
             <h2 id="composerTitle" class="text-modal-title font-semibold">New message</h2>
             <span
@@ -760,9 +876,9 @@
           </button>
         </div>
 
-        <form id="composerForm" class="flex flex-col lg:flex-row" @submit.prevent="submitComposer()" novalidate>
+        <form id="composerForm" class="flex flex-col lg:flex-row max-md:flex-1" @submit.prevent="submitComposer()" novalidate>
           <!-- Compose pane -->
-          <div class="flex min-w-0 flex-1 flex-col gap-[22px] px-7 py-6">
+          <div class="flex min-w-0 flex-1 flex-col gap-[22px] px-7 py-6 max-md:gap-4 max-md:p-4" :class="composer.showPreview ? 'max-md:hidden' : ''">
             <!-- Recipients -->
             <div class="flex flex-col gap-2">
               <div class="flex items-center justify-between">
@@ -775,7 +891,7 @@
 
               <div class="relative" @click.outside="picker.open = false">
                 <div
-                  class="flex min-h-10 cursor-text flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2.5 py-1.5 transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20"
+                  class="flex min-h-10 cursor-text flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2.5 py-1.5 transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 max-md:min-h-12 max-md:p-2"
                   :class="composer.errors.recipients ? 'border-failed-fg' : 'border-line-strong'"
                   @click="$refs.recipientInput.focus()"
                 >
@@ -801,7 +917,7 @@
                     class="h-7 min-w-[200px] flex-1 border-0 bg-transparent p-0 text-body text-ink placeholder:text-ink-muted focus:outline-none focus:ring-0"
                     placeholder="Search contacts or type a number…"
                     x-model="composer.query"
-                    @focus="picker.open = true"
+                    @focus="onRecipientFocus()"
                     @input="picker.open = true; picker.active = 0; delete composer.errors.recipients"
                     @keydown="onRecipientKey($event)"
                     @blur="onRecipientBlur()"
@@ -818,7 +934,7 @@
                   x-show="picker.open"
                   x-transition.opacity.duration.100ms
                   @mousedown.prevent
-                  class="absolute left-0 top-full z-20 mt-1 w-full max-w-[682px] overflow-hidden rounded-xl border border-line-strong bg-surface shadow-dropdown"
+                  class="max-md:hidden absolute left-0 top-full z-20 mt-1 w-full max-w-[682px] overflow-hidden rounded-xl border border-line-strong bg-surface shadow-dropdown"
                 >
                   <div class="flex flex-wrap gap-1.5 border-b border-line p-3">
                     <template x-for="f in pickerFilters" :key="f.value">
@@ -881,6 +997,73 @@
                       Save new contact
                     </a>
                     <span class="text-caption text-ink-muted" x-text="contacts.length + ' saved · stored in this browser'"></span>
+                  </div>
+                </div>
+
+                <!-- Small: contact picker bottom sheet — Figma "Contact picker — Mobile" -->
+                <div x-show="picker.open" class="md:hidden">
+                  <div class="fixed inset-0 z-50 bg-scrim/50" @click="closePicker()" x-transition.opacity></div>
+                  <div
+                    class="fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col gap-3 rounded-t-2xl bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+                    role="dialog"
+                    aria-label="Add recipients"
+                  >
+                    <div class="flex justify-center" aria-hidden="true"><span class="h-1 w-9 rounded-sm bg-line-strong"></span></div>
+                    <p class="text-card-title font-semibold">Add recipients</p>
+                    <label class="relative block">
+                      <span class="sr-only">Search contacts or type a number</span>
+                      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 20)"></span>
+                      <input
+                        x-ref="sheetSearch"
+                        type="text"
+                        autocomplete="off"
+                        class="input h-12 pl-10"
+                        placeholder="Search contacts or type a number"
+                        x-model="composer.query"
+                        @input="picker.active = 0; delete composer.errors.recipients"
+                        @keydown="onRecipientKey($event)"
+                      />
+                    </label>
+                    <p class="field-error mt-0" x-show="composer.errors.recipients">
+                      <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.recipients"></span>
+                    </p>
+                    <div class="-mx-4 min-h-0 flex-1 overflow-y-auto px-4">
+                      <template x-for="section in pickerSections()" :key="section.label">
+                        <div>
+                          <p class="pb-1 pt-2 text-caption font-semibold uppercase text-ink-muted" x-text="section.label"></p>
+                          <template x-for="opt in section.items" :key="opt.key">
+                            <button
+                              type="button"
+                              class="flex h-[52px] w-full items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                              @click="chooseOption(opt)"
+                              :aria-pressed="composer.recipients.includes(opt.jid)"
+                            >
+                              <span class="avatar size-9" x-html="icon(opt.isNew ? 'plus' : isGroup(opt.jid) ? 'users' : 'user', 18)"></span>
+                              <span class="min-w-0 flex-1">
+                                <span class="block truncate text-body font-semibold" x-text="opt.title"></span>
+                                <span class="block truncate text-caption text-ink-secondary" x-text="opt.subtitle"></span>
+                              </span>
+                              <span
+                                x-show="composer.recipients.includes(opt.jid)"
+                                class="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand text-white"
+                                x-html="icon('check', 16)"
+                              ></span>
+                            </button>
+                          </template>
+                        </div>
+                      </template>
+                      <p
+                        x-show="pickerSections().length === 0"
+                        class="py-6 text-center text-small text-ink-muted"
+                        x-text="composer.query ? 'No contacts match. Type a full number with country code.' : 'No saved contacts yet. Type a number with country code.'"
+                      ></p>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-primary h-12 w-full"
+                      @click="closePicker()"
+                      x-text="composer.recipients.length ? 'Add ' + plural(composer.recipients.length, 'recipient', 'recipients') : 'Done'"
+                    ></button>
                   </div>
                 </div>
               </div>
@@ -960,12 +1143,12 @@
               >
                 <div class="flex flex-wrap items-center gap-0.5 rounded-t-lg border-b border-line bg-subtle px-2 py-1.5" role="toolbar" aria-label="Formatting">
                   <template x-for="tool in toolbar" :key="tool.key">
-                    <span class="contents">
+                    <span class="contents" :class="tool.small === false ? 'max-md:hidden' : ''">
                       <span x-show="tool.divider" class="mx-1 h-[18px] w-px bg-line-strong" aria-hidden="true"></span>
                       <button
                         x-show="!tool.divider"
                         type="button"
-                        class="inline-flex size-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        class="inline-flex size-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-10 max-md:w-11"
                         @mousedown.prevent
                         @click="applyTool(tool.key)"
                         :aria-label="tool.label"
@@ -977,7 +1160,7 @@
                   <div class="relative" @click.outside="emojiOpen = false">
                     <button
                       type="button"
-                      class="inline-flex size-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      class="inline-flex size-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-10 max-md:w-11"
                       :class="emojiOpen ? 'bg-brand-soft text-brand' : ''"
                       @mousedown.prevent
                       @click="emojiOpen = !emojiOpen"
@@ -986,7 +1169,7 @@
                       :aria-expanded="emojiOpen"
                       x-html="icon('smile', 16)"
                     ></button>
-                    <div x-show="emojiOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-line shadow-dropdown">
+                    <div x-show="emojiOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-line shadow-dropdown max-md:fixed max-md:inset-x-4 max-md:bottom-[88px] max-md:top-auto max-md:mt-0">
                       <emoji-picker class="light" @emoji-click="insertText($event.detail.unicode); emojiOpen = false"></emoji-picker>
                     </div>
                   </div>
@@ -1016,35 +1199,35 @@
             <div class="flex flex-col gap-2" role="group" aria-labelledby="sendTimeLabel">
               <span id="sendTimeLabel" class="text-label font-medium text-ink-secondary" x-text="'Send time (' + TZ_LABEL + ')'"></span>
               <div class="flex flex-wrap items-center gap-2">
-                <div class="relative w-[190px]">
+                <div class="relative w-[190px] max-md:w-auto max-md:min-w-0 max-md:flex-1">
                   <span class="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-ink-muted" x-html="icon('calendar', 16)"></span>
                   <input
                     id="composerDate"
                     type="text"
-                    class="input pl-9"
+                    class="input pl-9 max-md:h-12"
                     :class="composer.errors.time ? 'input-invalid' : ''"
                     placeholder="Date"
                     aria-label="Send date"
                     readonly
                   />
                 </div>
-                <div class="relative w-[120px]">
+                <div class="relative w-[120px] max-md:w-[112px]">
                   <span class="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-ink-muted" x-html="icon('clock', 16)"></span>
                   <input
                     id="composerTime"
                     type="text"
-                    class="input pl-9"
+                    class="input pl-9 max-md:h-12"
                     :class="composer.errors.time ? 'input-invalid' : ''"
                     placeholder="Time"
                     aria-label="Send time"
                     readonly
                   />
                 </div>
-                <div class="flex flex-wrap gap-1.5 px-1.5">
+                <div class="flex flex-wrap gap-1.5 px-1.5 max-md:order-first max-md:w-full max-md:gap-2 max-md:px-0">
                   <template x-for="p in presets" :key="p.key">
                     <button
                       type="button"
-                      class="inline-flex h-7 items-center rounded-full border px-2.5 text-label font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      class="inline-flex h-7 items-center rounded-full border px-2.5 text-label font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand max-md:h-[38px] max-md:px-3 max-md:text-body"
                       :class="composer.preset === p.key ? 'border-brand bg-brand-soft text-brand' : 'border-line-strong bg-surface text-ink-secondary hover:bg-subtle'"
                       @click="applyPreset(p.key)"
                       :aria-pressed="composer.preset === p.key"
@@ -1057,10 +1240,24 @@
                 <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.time"></span>
               </p>
             </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 md:hidden">
+              <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-small text-ink-secondary">
+                <input type="checkbox" class="size-[18px] cursor-pointer accent-brand" x-model="composer.saveTemplate" />
+                Save message as template
+              </label>
+              <button type="button" x-show="composer.savedAt" class="btn-text min-h-11 text-small font-medium text-ink-secondary" @click="discardDraft()">
+                Discard draft
+              </button>
+            </div>
           </div>
 
           <!-- Preview pane -->
-          <aside class="flex shrink-0 flex-col gap-[18px] border-t border-line bg-subtle p-6 lg:w-[340px] lg:border-l lg:border-t-0" aria-label="Preview">
+          <aside
+            class="flex shrink-0 flex-col gap-[18px] border-t border-line bg-subtle p-6 lg:w-[340px] lg:border-l lg:border-t-0 max-md:flex-1 max-md:border-t-0 max-md:p-4"
+            :class="composer.showPreview ? '' : 'max-md:hidden'"
+            aria-label="Preview"
+          >
             <p class="text-label font-medium text-ink-secondary">WhatsApp preview</p>
             <div class="flex flex-col items-end rounded-10 bg-chat-bg px-4 py-5">
               <div class="wa-bubble w-full max-w-[250px] break-words rounded-lg bg-chat-bubble px-3 py-2 text-small leading-[19px] text-ink shadow-sm">
@@ -1094,7 +1291,22 @@
           </aside>
         </form>
 
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line px-7 py-4">
+        <!-- Small: sticky action bar -->
+        <div class="sticky bottom-0 z-10 flex gap-3 border-t border-line bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
+          <button
+            type="button"
+            class="btn btn-secondary h-12 w-[110px] text-ink"
+            @click="composer.showPreview = !composer.showPreview"
+            :aria-pressed="composer.showPreview"
+            x-text="composer.showPreview ? 'Edit' : 'Preview'"
+          ></button>
+          <button type="submit" form="composerForm" class="btn btn-primary h-12 flex-1" :disabled="composer.loading">
+            <span x-show="composer.loading" class="spinner"></span>
+            <span x-text="composer.loading ? 'Scheduling…' : 'Schedule message'"></span>
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line px-7 py-4 max-md:hidden">
           <div class="flex items-center gap-4">
             <label class="inline-flex cursor-pointer items-center gap-2 text-small text-ink-secondary">
               <input type="checkbox" class="size-[18px] cursor-pointer accent-brand" x-model="composer.saveTemplate" />
@@ -1280,6 +1492,7 @@
           </p>
         </form>
         <div class="modal-footer">
+          <button type="button" class="btn-text mr-auto min-h-11 text-small font-medium md:hidden" @click="retryToDetail()">View details</button>
           <button type="button" class="btn btn-secondary" @click="closeRetry()">Cancel</button>
           <button type="submit" form="retryForm" class="btn btn-primary min-w-[150px]" :disabled="retry.loading">
             <span x-show="retry.loading" class="spinner"></span>
@@ -1582,6 +1795,9 @@
          RECIPIENTS
          ===================================================================== */
       const isGroup = (jid) => String(jid || "").endsWith("@g.us");
+      // Small breakpoint matches tailwind.config screens (md starts at 641px).
+      const isSmall = () => window.matchMedia("(max-width: 640px)").matches;
+
 
       // "+62 812-3456 7890" / "0812..." / "62812..." -> "62812...@s.whatsapp.net"
       function normalizeRecipient(raw) {
@@ -1782,6 +1998,11 @@
             { route: "contacts", label: "Contacts", icon: "book" },
             { route: "templates", label: "Templates", icon: "file-text" },
           ],
+          mobileNavItems: [
+            { route: "messages", label: "Messages", icon: "message-square" },
+            { route: "contacts", label: "Contacts", icon: "users" },
+            { route: "templates", label: "Templates", icon: "bookmark" },
+          ],
           statusTabs: [
             { value: "", label: "All" },
             { value: "scheduled", label: "Scheduled" },
@@ -1799,11 +2020,11 @@
             { key: "italic", label: "Italic (Ctrl+I)", icon: "italic" },
             { key: "strike", label: "Strikethrough", icon: "strike" },
             { key: "code", label: "Monospace", icon: "code" },
-            { key: "d1", divider: true },
-            { key: "quote", label: "Quote", icon: "quote" },
+            { key: "d1", divider: true, small: false },
+            { key: "quote", label: "Quote", icon: "quote", small: false },
             { key: "ul", label: "Bulleted list", icon: "list" },
-            { key: "ol", label: "Numbered list", icon: "list-ordered" },
-            { key: "d2", divider: true },
+            { key: "ol", label: "Numbered list", icon: "list-ordered", small: false },
+            { key: "d2", divider: true, small: false },
           ],
           presets: [
             { key: "hour", label: "In 1 hour" },
@@ -1851,11 +2072,14 @@
             loading: false,
             saveNew: true,
             saveTemplate: false,
+            showPreview: false,
             savedAt: 0,
           },
           picker: { open: false, filter: "all", active: 0 },
           emojiOpen: false,
           templateMenuOpen: false,
+          drawerOpen: false,
+          mobileSearch: false,
           contactFilter: "all",
           contactSearch: "",
           templateSearch: "",
@@ -1973,8 +2197,31 @@
 
           // ---- routing & keyboard ----
           readHash() {
+            this.drawerOpen = false;
             const r = location.hash.replace(/^#\/?/, "");
             this.route = ["messages", "contacts", "templates"].includes(r) ? r : "messages";
+          },
+
+          routeLabel() {
+            return this.navItems.find((n) => n.route === this.route)?.label || "Messages";
+          },
+          fabLabel() {
+            return { contacts: "New contact", templates: "New template" }[this.route] || "New message";
+          },
+          fabAction() {
+            if (this.route === "contacts") this.openContactForm();
+            else if (this.route === "templates") this.openTemplateForm();
+            else this.openComposer();
+          },
+          toggleMobileSearch() {
+            this.mobileSearch = !this.mobileSearch;
+            if (!this.mobileSearch) return;
+            const ref = { messages: "search", contacts: "contactSearchInput", templates: "templateSearchInput" }[this.route];
+            this.$nextTick(() => this.$refs[ref]?.focus());
+          },
+          recipientSummary(m) {
+            const first = this.displayRecipient(m.recipient_numbers[0]);
+            return m.recipient_numbers.length > 1 ? `${first}, +${m.recipient_numbers.length - 1}` : first;
           },
 
           navCount(route) {
@@ -2001,6 +2248,7 @@
             if (e.key === "Escape") {
               if (document.querySelector(".flatpickr-calendar.open")) return;
               if (this.confirm.open) this.resolveConfirm(false);
+              else if (this.drawerOpen) this.drawerOpen = false;
               else if (this.templateMenuOpen) this.templateMenuOpen = false;
               else if (this.emojiOpen) this.emojiOpen = false;
               else if (this.picker.open) this.picker.open = false;
@@ -2204,6 +2452,11 @@
           },
           closeRetry() {
             this.retry.open = false;
+          },
+          retryToDetail() {
+            const m = this.all.find((x) => x.id === this.retry.id) || this.list.find((x) => x.id === this.retry.id);
+            this.closeRetry();
+            if (m) this.openDetail(m);
           },
           retryTs() {
             const ts = parseJakartaInput(this.retry.time);
@@ -2450,6 +2703,7 @@
               loading: false,
               saveNew: true,
               saveTemplate: false,
+              showPreview: false,
               savedAt: draft?.savedAt || 0,
             });
             this.picker.open = false;
@@ -2458,7 +2712,7 @@
             this.emojiOpen = false;
             this.$nextTick(() => {
               this.syncTimePickers();
-              setTimeout(() => (this.composer.recipients.length ? this.$refs.editor : this.$refs.recipientInput)?.focus(), 50);
+              if (!isSmall()) setTimeout(() => (this.composer.recipients.length ? this.$refs.editor : this.$refs.recipientInput)?.focus(), 50);
             });
           },
           closeComposer() {
@@ -2555,7 +2809,30 @@
               this.picker.open = false;
             }
           },
+          onRecipientFocus() {
+            this.picker.open = true;
+            if (isSmall()) {
+              this.picker.filter = "all";
+              this.$nextTick(() => this.$refs.sheetSearch?.focus());
+            }
+          },
+          closePicker() {
+            if (this.composer.query.trim()) this.commitQuery();
+            this.picker.open = false;
+          },
+          pickerSections() {
+            const opts = this.pickerOptions();
+            const sections = [
+              { label: "Add number", items: opts.filter((o) => o.isNew) },
+              { label: "Favorites", items: opts.filter((o) => !o.isNew && o.favorite) },
+              { label: "Groups", items: opts.filter((o) => !o.isNew && !o.favorite && o.tag !== "Recent" && isGroup(o.jid)) },
+              { label: "People", items: opts.filter((o) => !o.isNew && !o.favorite && o.tag !== "Recent" && !isGroup(o.jid)) },
+              { label: "Recent", items: opts.filter((o) => o.tag === "Recent") },
+            ];
+            return sections.filter((sec) => sec.items.length);
+          },
           onRecipientBlur() {
+            if (isSmall()) return;
             this.picker.open = false;
             if (this.composer.query.trim()) this.commitQuery();
           },
