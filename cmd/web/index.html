@@ -21,12 +21,8 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"
     />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
-    <!-- Temporary (iteration 1a): replaced by the custom token input in 1b -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/styles/choices.min.css"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/scripts/choices.min.js"></script>
+    <!-- Emoji picker web component (emoji data is fetched from jsdelivr) -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js"></script>
 
     <!-- ===================================================================
          DESIGN TOKENS (Figma "Design System" page)
@@ -145,14 +141,27 @@
       .flatpickr-day.today { border-color: #0f7b6c; }
       .flatpickr-day.today:hover { background: #e6f4f1; color: #0f7b6c; }
 
-      /* choices.js restyle (temporary, iteration 1a) */
-      .choices { margin-bottom: 0; font-size: 14px; }
-      .choices__inner { min-height: 40px; padding: 4px 8px; border: 1px solid #cbd2da; border-radius: 8px; background: #fff; }
-      .is-focused .choices__inner, .is-open .choices__inner { border-color: #0f7b6c; box-shadow: 0 0 0 2px rgba(15, 123, 108, 0.2); }
-      .choices__input { background: transparent; font-size: 14px; margin-bottom: 0; }
-      .choices__list--multiple .choices__item { background: #e6f4f1; border: 0; color: #0f7b6c; border-radius: 999px; font-size: 13px; font-weight: 500; padding: 4px 10px; }
-      .choices[data-type*="select-multiple"] .choices__button { border-left: 1px solid rgba(15, 123, 108, 0.3); filter: invert(33%) sepia(80%) saturate(500%) hue-rotate(130deg); }
-      .choices__list--dropdown, .choices__list[aria-expanded] { border-radius: 12px; border-color: #e3e7ec; box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.18); }
+      /* WhatsApp preview bubble */
+      .wa-bubble strong { font-weight: 700; }
+      .wa-quote { border-left: 3px solid rgba(17, 24, 39, 0.25); padding-left: 8px; color: #4b5563; }
+      .wa-li { display: flex; gap: 6px; }
+      .wa-mono { display: block; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      .wa-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background: rgba(17, 24, 39, 0.06); border-radius: 3px; padding: 0 3px; }
+      .wa-link { color: #027eb5; text-decoration: underline; word-break: break-all; }
+
+      /* emoji-picker-element theme (tokens) */
+      emoji-picker {
+        --background: #ffffff;
+        --border-color: transparent;
+        --indicator-color: #0f7b6c;
+        --outline-color: #0f7b6c;
+        --input-border-radius: 8px;
+        --input-border-color: #cbd2da;
+        --button-hover-background: #e6f4f1;
+        --button-active-background: #e6f4f1;
+        --num-columns: 8;
+        height: 320px;
+      }
     </style>
   </head>
 
@@ -566,74 +575,346 @@
     </div>
 
     <!-- ===================================================================
-         TEMPLATE: New message (interim modal, replaced by composer in 1b)
+         TEMPLATE: Composer (New message) — Figma "Modal / New message"
          =================================================================== -->
     <div x-show="composer.open" x-cloak class="modal-scrim" @mousedown.self="closeComposer()" x-transition.opacity>
       <div
-        class="modal max-w-[640px]"
+        class="modal max-w-[1080px]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="composerTitle"
         x-trap.noscroll="composer.open"
+        @keydown.ctrl.enter.prevent="submitComposer()"
+        @keydown.meta.enter.prevent="submitComposer()"
       >
-        <div class="modal-header">
-          <h2 id="composerTitle" class="text-modal-title font-semibold">New message</h2>
+        <div class="flex items-center justify-between gap-4 border-b border-line px-7 py-[18px]">
+          <div class="flex items-center gap-3">
+            <h2 id="composerTitle" class="text-modal-title font-semibold">New message</h2>
+            <span
+              x-show="composer.savedAt"
+              class="inline-flex h-6 items-center gap-1.5 rounded-full bg-subtle px-2.5 text-caption text-ink-muted"
+            >
+              <span x-html="icon('check-circle', 12)"></span>
+              <span x-text="'Draft saved ' + fmtTime(composer.savedAt)"></span>
+            </span>
+          </div>
           <button type="button" class="btn-icon" @click="closeComposer()" aria-label="Close">
-            <span x-html="icon('x', 20)"></span>
+            <span x-html="icon('x', 18)"></span>
           </button>
         </div>
-        <form id="composerForm" class="space-y-5 px-6 py-5" @submit.prevent="submitComposer()" novalidate>
-          <div>
-            <label for="composerRecipients" class="field-label">Recipients</label>
-            <div x-ignore><select id="composerRecipients" multiple></select></div>
-            <p class="field-error" x-show="composer.errors.recipients">
-              <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.recipients"></span>
-            </p>
-            <p class="field-hint" x-show="!composer.errors.recipients">
-              Type a number with country code (e.g. +62 812 3456 7890) or a group ID, then press Enter.
-            </p>
-          </div>
-          <div>
-            <label for="composerContent" class="field-label">Message</label>
-            <textarea
-              id="composerContent"
-              rows="7"
-              class="input h-auto min-h-[190px] py-2.5"
-              :class="composer.errors.content ? 'input-invalid' : ''"
-              x-model="composer.content"
-            ></textarea>
-            <div class="flex items-start justify-between gap-3">
-              <p class="field-error" x-show="composer.errors.content">
+
+        <form id="composerForm" class="flex flex-col lg:flex-row" @submit.prevent="submitComposer()" novalidate>
+          <!-- Compose pane -->
+          <div class="flex min-w-0 flex-1 flex-col gap-[22px] px-7 py-6">
+            <!-- Recipients -->
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <label for="recipientInput" class="text-label font-medium text-ink-secondary">Recipients</label>
+                <a href="#/contacts" class="inline-flex items-center gap-1.5 text-small font-medium text-brand hover:underline" @click="closeComposer()">
+                  <span x-html="icon('book', 14)"></span>
+                  Manage contacts
+                </a>
+              </div>
+
+              <div class="relative" @click.outside="picker.open = false">
+                <div
+                  class="flex min-h-10 cursor-text flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2.5 py-1.5 transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20"
+                  :class="composer.errors.recipients ? 'border-failed-fg' : 'border-line-strong'"
+                  @click="$refs.recipientInput.focus()"
+                >
+                  <template x-for="jid in composer.recipients" :key="jid">
+                    <span class="chip" :title="jid">
+                      <span x-html="icon(isGroup(jid) ? 'users' : 'user', 14)"></span>
+                      <span x-text="displayRecipient(jid)"></span>
+                      <button
+                        type="button"
+                        class="-mr-1 rounded-full p-0.5 hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        @click.stop="removeRecipient(jid)"
+                        :aria-label="'Remove ' + displayRecipient(jid)"
+                      >
+                        <span x-html="icon('x', 14)"></span>
+                      </button>
+                    </span>
+                  </template>
+                  <input
+                    id="recipientInput"
+                    x-ref="recipientInput"
+                    type="text"
+                    autocomplete="off"
+                    class="h-7 min-w-[200px] flex-1 border-0 bg-transparent p-0 text-body text-ink placeholder:text-ink-muted focus:outline-none focus:ring-0"
+                    placeholder="Search contacts or type a number…"
+                    x-model="composer.query"
+                    @focus="picker.open = true"
+                    @input="picker.open = true; picker.active = 0; delete composer.errors.recipients"
+                    @keydown="onRecipientKey($event)"
+                    @blur="onRecipientBlur()"
+                    @paste="onRecipientPaste($event)"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-controls="recipientList"
+                    :aria-expanded="picker.open"
+                  />
+                </div>
+
+                <!-- Contact picker — Figma "Dropdown / Saved contacts" -->
+                <div
+                  x-show="picker.open"
+                  x-transition.opacity.duration.100ms
+                  @mousedown.prevent
+                  class="absolute left-0 top-full z-20 mt-1 w-full max-w-[682px] overflow-hidden rounded-xl border border-line-strong bg-surface shadow-dropdown"
+                >
+                  <div class="flex flex-wrap gap-1.5 border-b border-line p-3">
+                    <template x-for="f in pickerFilters" :key="f.value">
+                      <button
+                        type="button"
+                        class="flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-caption transition-colors"
+                        :class="picker.filter === f.value ? 'bg-brand-soft text-brand' : 'bg-subtle text-ink-secondary hover:bg-page'"
+                        @mousedown.prevent="picker.filter = f.value; picker.active = 0"
+                        :aria-pressed="picker.filter === f.value"
+                      >
+                        <span class="font-semibold" x-text="f.label"></span>
+                        <span :class="picker.filter === f.value ? '' : 'text-ink-muted'" x-text="pickerCount(f.value)"></span>
+                      </button>
+                    </template>
+                  </div>
+                  <ul id="recipientList" role="listbox" aria-label="Contacts" aria-multiselectable="true" class="max-h-[280px] overflow-y-auto p-1.5">
+                    <template x-for="(opt, i) in pickerOptions()" :key="opt.key">
+                      <li
+                        role="option"
+                        :aria-selected="composer.recipients.includes(opt.jid)"
+                        class="flex h-[52px] cursor-pointer items-center gap-3 rounded-lg px-2.5"
+                        :class="picker.active === i ? 'bg-subtle' : ''"
+                        @mouseenter="picker.active = i"
+                        @mousedown.prevent="chooseOption(opt)"
+                      >
+                        <span class="avatar size-8" x-html="icon(opt.isNew ? 'plus' : isGroup(opt.jid) ? 'users' : 'user', 16)"></span>
+                        <span class="min-w-0 flex-1">
+                          <span class="block truncate text-body font-semibold" x-text="opt.title"></span>
+                          <span class="block truncate text-caption text-ink-muted" x-text="opt.subtitle"></span>
+                        </span>
+                        <span
+                          x-show="composer.recipients.includes(opt.jid)"
+                          class="inline-flex h-[22px] items-center gap-1 rounded-full bg-brand-soft px-2 text-caption font-semibold text-brand"
+                        >
+                          <span x-html="icon('check', 12)"></span>
+                          Added
+                        </span>
+                        <span x-show="opt.tag" class="count" x-text="opt.tag"></span>
+                        <button
+                          type="button"
+                          x-show="opt.contactId"
+                          class="rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                          :class="opt.favorite ? 'text-brand' : 'text-line-strong hover:text-ink-muted'"
+                          @mousedown.prevent.stop="toggleFavorite(opt.contactId)"
+                          :aria-label="(opt.favorite ? 'Remove from favorites: ' : 'Add to favorites: ') + opt.title"
+                          :aria-pressed="opt.favorite"
+                          x-html="starIcon(opt.favorite)"
+                        ></button>
+                      </li>
+                    </template>
+                    <li
+                      x-show="pickerOptions().length === 0"
+                      class="px-3 py-6 text-center text-small text-ink-muted"
+                      x-text="composer.query ? 'No contacts match. Type a full number with country code and press Enter.' : 'No saved contacts yet. Type a number with country code and press Enter.'"
+                    ></li>
+                  </ul>
+                  <div class="flex items-center justify-between gap-3 border-t border-line bg-subtle px-4 py-3">
+                    <a href="#/contacts" class="inline-flex items-center gap-1.5 text-small font-semibold text-brand hover:underline" @click="closeComposer()">
+                      <span x-html="icon('plus', 16)"></span>
+                      Save new contact
+                    </a>
+                    <span class="text-caption text-ink-muted" x-text="contacts.length + ' saved · stored in this browser'"></span>
+                  </div>
+                </div>
+              </div>
+
+              <p class="field-error mt-0" x-show="composer.errors.recipients">
+                <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.recipients"></span>
+              </p>
+              <p class="field-hint mt-0" x-show="!composer.errors.recipients && !composer.recipients.length">
+                Pick a contact, or type a number with country code (e.g. +62 812 3456 7890) or a group ID and press Enter.
+              </p>
+
+              <div x-show="favorites().length" class="flex flex-wrap items-center gap-1.5">
+                <span class="text-caption text-ink-muted">Favorites:</span>
+                <template x-for="c in favorites()" :key="c.id">
+                  <button
+                    type="button"
+                    class="inline-flex h-[26px] items-center gap-1.5 rounded-full border px-2.5 text-label font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    :class="composer.recipients.includes(c.jid) ? 'border-brand bg-brand-soft text-brand' : 'border-line-strong bg-surface text-ink-secondary hover:bg-subtle'"
+                    @click="toggleRecipient(c.jid)"
+                    :aria-pressed="composer.recipients.includes(c.jid)"
+                  >
+                    <span x-html="starIcon(true, 14)"></span>
+                    <span x-text="c.name"></span>
+                  </button>
+                </template>
+              </div>
+
+              <label x-show="unsavedRecipients().length" class="inline-flex w-fit cursor-pointer items-center gap-2 text-small text-ink-secondary">
+                <input type="checkbox" class="size-[18px] cursor-pointer accent-brand" x-model="composer.saveNew" />
+                <span x-text="'Save new ' + (unsavedRecipients().length === 1 ? 'number' : 'numbers') + ' to my contacts'"></span>
+              </label>
+            </div>
+
+            <!-- Message -->
+            <div class="flex flex-col gap-2">
+              <label for="composerContent" class="text-label font-medium text-ink-secondary">Message</label>
+              <div
+                class="rounded-lg border bg-surface transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20"
+                :class="composer.errors.content ? 'border-failed-fg' : 'border-line-strong'"
+              >
+                <div class="flex flex-wrap items-center gap-0.5 rounded-t-lg border-b border-line bg-subtle px-2 py-1.5" role="toolbar" aria-label="Formatting">
+                  <template x-for="tool in toolbar" :key="tool.key">
+                    <span class="contents">
+                      <span x-show="tool.divider" class="mx-1 h-[18px] w-px bg-line-strong" aria-hidden="true"></span>
+                      <button
+                        x-show="!tool.divider"
+                        type="button"
+                        class="inline-flex size-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        @mousedown.prevent
+                        @click="applyTool(tool.key)"
+                        :aria-label="tool.label"
+                        :title="tool.label"
+                        x-html="icon(tool.icon, 16)"
+                      ></button>
+                    </span>
+                  </template>
+                  <div class="relative" @click.outside="emojiOpen = false">
+                    <button
+                      type="button"
+                      class="inline-flex size-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      :class="emojiOpen ? 'bg-brand-soft text-brand' : ''"
+                      @mousedown.prevent
+                      @click="emojiOpen = !emojiOpen"
+                      aria-label="Insert emoji"
+                      title="Insert emoji"
+                      :aria-expanded="emojiOpen"
+                      x-html="icon('smile', 16)"
+                    ></button>
+                    <div x-show="emojiOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-line shadow-dropdown">
+                      <emoji-picker class="light" @emoji-click="insertText($event.detail.unicode); emojiOpen = false"></emoji-picker>
+                    </div>
+                  </div>
+                  <span class="ml-auto hidden pr-1 text-caption text-ink-muted lg:inline">Ctrl+B bold · Ctrl+I italic</span>
+                </div>
+                <textarea
+                  id="composerContent"
+                  x-ref="editor"
+                  rows="8"
+                  class="block min-h-[190px] w-full resize-y border-0 bg-transparent px-4 py-3.5 text-body leading-[22px] text-ink placeholder:text-ink-muted focus:outline-none focus:ring-0"
+                  placeholder="Write your message…"
+                  x-model="composer.content"
+                  @input="delete composer.errors.content"
+                  @keydown="onEditorKey($event)"
+                ></textarea>
+                <div class="flex items-center justify-between gap-3 rounded-b-lg border-t border-line px-4 py-2 text-caption text-ink-muted">
+                  <span class="truncate">Saved as WhatsApp formatting: *bold* &nbsp;_italic_ &nbsp;~strike~</span>
+                  <span class="shrink-0" x-text="plural(composer.content.length, 'character', 'characters')"></span>
+                </div>
+              </div>
+              <p class="field-error mt-0" x-show="composer.errors.content">
                 <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.content"></span>
               </p>
-              <span class="field-hint ml-auto" x-text="plural(composer.content.length, 'character', 'characters')"></span>
+            </div>
+
+            <!-- Send time -->
+            <div class="flex flex-col gap-2" role="group" aria-labelledby="sendTimeLabel">
+              <span id="sendTimeLabel" class="text-label font-medium text-ink-secondary" x-text="'Send time (' + TZ_LABEL + ')'"></span>
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="relative w-[190px]">
+                  <span class="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-ink-muted" x-html="icon('calendar', 16)"></span>
+                  <input
+                    id="composerDate"
+                    type="text"
+                    class="input pl-9"
+                    :class="composer.errors.time ? 'input-invalid' : ''"
+                    placeholder="Date"
+                    aria-label="Send date"
+                    readonly
+                  />
+                </div>
+                <div class="relative w-[120px]">
+                  <span class="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-ink-muted" x-html="icon('clock', 16)"></span>
+                  <input
+                    id="composerTime"
+                    type="text"
+                    class="input pl-9"
+                    :class="composer.errors.time ? 'input-invalid' : ''"
+                    placeholder="Time"
+                    aria-label="Send time"
+                    readonly
+                  />
+                </div>
+                <div class="flex flex-wrap gap-1.5 px-1.5">
+                  <template x-for="p in presets" :key="p.key">
+                    <button
+                      type="button"
+                      class="inline-flex h-7 items-center rounded-full border px-2.5 text-label font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      :class="composer.preset === p.key ? 'border-brand bg-brand-soft text-brand' : 'border-line-strong bg-surface text-ink-secondary hover:bg-subtle'"
+                      @click="applyPreset(p.key)"
+                      :aria-pressed="composer.preset === p.key"
+                      x-text="p.label"
+                    ></button>
+                  </template>
+                </div>
+              </div>
+              <p class="field-error mt-0" x-show="composer.errors.time">
+                <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.time"></span>
+              </p>
             </div>
           </div>
-          <div>
-            <label for="composerTime" class="field-label" x-text="'Send time (' + TZ_LABEL + ')'"></label>
-            <div class="relative">
-              <input
-                id="composerTime"
-                type="text"
-                class="input"
-                :class="composer.errors.time ? 'input-invalid' : ''"
-                placeholder="Pick date and time"
-                readonly
-              />
+
+          <!-- Preview pane -->
+          <aside class="flex shrink-0 flex-col gap-[18px] border-t border-line bg-subtle p-6 lg:w-[340px] lg:border-l lg:border-t-0" aria-label="Preview">
+            <p class="text-label font-medium text-ink-secondary">WhatsApp preview</p>
+            <div class="flex flex-col items-end rounded-10 bg-chat-bg px-4 py-5">
+              <div class="wa-bubble w-full max-w-[250px] break-words rounded-lg bg-chat-bubble px-3 py-2 text-small leading-[19px] text-ink shadow-sm">
+                <div x-show="composer.content.trim()" x-html="renderWhatsApp(composer.content)"></div>
+                <p x-show="!composer.content.trim()" class="italic text-ink-muted">Your message preview appears here.</p>
+                <p class="mt-1.5 text-right text-count text-ink-muted" x-text="composerTs() ? fmtTime(composerTs()) : '--:--'"></p>
+              </div>
             </div>
-            <p class="field-error" x-show="composer.errors.time">
-              <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.time"></span>
-            </p>
-            <p class="field-hint" x-show="!composer.errors.time && composerTs()" x-text="sendSummary(composerTs())"></p>
-          </div>
+            <div class="flex flex-col gap-3 rounded-10 border border-line bg-surface px-4 py-3.5">
+              <p class="text-small font-semibold">Delivery summary</p>
+              <div>
+                <p class="text-caption text-ink-muted">To</p>
+                <p class="text-small font-medium" x-text="composer.recipients.length ? plural(composer.recipients.length, 'recipient', 'recipients') : 'No recipients yet'"></p>
+                <p x-show="composer.recipients.length" class="line-clamp-2 text-caption text-ink-muted" x-text="composer.recipients.map(displayRecipient).join(', ')"></p>
+              </div>
+              <div>
+                <p class="text-caption text-ink-muted">Sends</p>
+                <p class="text-small font-medium" x-text="composerTs() ? fmtDate(composerTs(), true) + ' · ' + fmtTime(composerTs()) : 'Pick a date and time'"></p>
+                <p
+                  x-show="composerTs()"
+                  class="text-caption"
+                  :class="composerTs() < now - 60 ? 'text-failed-fg' : 'text-ink-muted'"
+                  x-text="composerTs() < now - 60 ? 'This time has already passed' : rel(composerTs()) + ' · ' + fmtUtc(composerTs())"
+                ></p>
+              </div>
+              <div>
+                <p class="text-caption text-ink-muted">Time zone</p>
+                <p class="text-small font-medium" x-text="TZ_LABEL"></p>
+              </div>
+            </div>
+          </aside>
         </form>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" @click="closeComposer()">Cancel</button>
-          <button type="submit" form="composerForm" class="btn btn-primary min-w-[172px]" :disabled="composer.loading">
-            <span x-show="composer.loading" class="spinner"></span>
-            <span x-show="!composer.loading" x-html="icon('send', 16)"></span>
-            <span x-text="composer.loading ? 'Scheduling…' : 'Schedule message'"></span>
-          </button>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line px-7 py-4">
+          <div class="flex items-center gap-4">
+            <button type="button" x-show="composer.savedAt" class="btn-text text-small font-medium text-ink-secondary" @click="discardDraft()">
+              Discard draft
+            </button>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <button type="button" class="btn btn-secondary" @click="closeComposer()">Cancel</button>
+            <button type="submit" form="composerForm" class="btn btn-primary min-w-[230px]" :disabled="composer.loading">
+              <span x-show="composer.loading" class="spinner"></span>
+              <span x-show="!composer.loading" x-html="icon('send', 16)"></span>
+              <span x-text="composer.loading ? 'Scheduling…' : 'Schedule message'"></span>
+              <kbd x-show="!composer.loading" class="inline-flex h-5 items-center rounded bg-white/20 px-1.5 font-sans text-count font-medium">Ctrl ↵</kbd>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -857,6 +1138,9 @@
             localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
           } catch {}
         },
+        remove(key) {
+          try { localStorage.removeItem(key); } catch {}
+        },
       };
 
       // For the few places that must build HTML strings. Templates use x-text,
@@ -870,9 +1154,20 @@
           .replace(/'/g, "&#39;");
       }
 
-      function icon(name, size = 16) {
+      // Feather has no strikethrough / quote / ordered-list glyphs; these
+      // follow the same 24px, 2px-stroke style (paths from Lucide, ISC).
+      const CUSTOM_ICONS = {
+        strike: '<path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/>',
+        quote: '<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.76-2-2-2H4c-1.25 0-2 .75-2 1.97V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .01-1 1.03V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.76-2-2-2h-4c-1.25 0-2 .75-2 1.97V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>',
+        "list-ordered": '<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>',
+      };
+
+      function icon(name, size = 16, attrs = {}) {
+        if (CUSTOM_ICONS[name]) {
+          return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${CUSTOM_ICONS[name]}</svg>`;
+        }
         const i = window.feather && feather.icons[name];
-        return i ? i.toSvg({ width: size, height: size, "aria-hidden": "true", focusable: "false" }) : "";
+        return i ? i.toSvg({ width: size, height: size, "aria-hidden": "true", focusable: "false", ...attrs }) : "";
       }
 
       const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
@@ -971,9 +1266,10 @@
           minuteIncrement: 1,
           dateFormat: "Y-m-d H:i",
           static: true,
-          minDate: toJakartaInput(nowTs()).slice(0, 10),
+          disableMobile: true,
+          minDate: jktTodayLocal(),
           onOpen(_, __, fp) {
-            fp.set("minDate", toJakartaInput(nowTs()).slice(0, 10));
+            fp.set("minDate", jktTodayLocal());
             if (!fp.input.value) fp.setDate(toJakartaInput(nowTs() + 5 * 60), true);
           },
           onChange(_, dateStr) { onChange(dateStr); },
@@ -1029,6 +1325,71 @@
         return capitalize(inner || r);
       }
       const retriedLabel = (n) => (n > 0 ? `retried ${n} ${n === 1 ? "time" : "times"}` : "");
+
+      /* =====================================================================
+         WHATSAPP MARKUP — preview renderer (escape first, then add our tags)
+         ===================================================================== */
+      const WA_OPEN = "(^|[\\s>(\\[{.,!?;:\"'-])";
+      const WA_CLOSE = "(?=$|[\\s<)\\]}.,!?;:\"'&-])";
+      const WA_INLINE = [
+        [new RegExp(WA_OPEN + "\\*(\\S(?:[^*\\n]*?\\S)?)\\*" + WA_CLOSE, "g"), "$1<strong>$2</strong>"],
+        [new RegExp(WA_OPEN + "_(\\S(?:[^_\\n]*?\\S)?)_" + WA_CLOSE, "g"), "$1<em>$2</em>"],
+        [new RegExp(WA_OPEN + "~(\\S(?:[^~\\n]*?\\S)?)~" + WA_CLOSE, "g"), "$1<s>$2</s>"],
+      ];
+
+      function renderWhatsAppInline(s) {
+        const kept = [];
+        const keep = (html) => `\u0000${kept.push(html) - 1}\u0000`;
+        s = s.replace(/`([^`\n]+)`/g, (_, c) => keep(`<code class="wa-code">${c}</code>`));
+        s = s.replace(/https?:\/\/[^\s<]+/g, (url) => keep(`<span class="wa-link">${url}</span>`));
+        for (const [re, html] of WA_INLINE) s = s.replace(re, html);
+        return s.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[i]);
+      }
+
+      function renderWhatsAppLines(s) {
+        return s
+          .split("\n")
+          .map((line) => {
+            let m;
+            if ((m = /^&gt; ?(.*)$/.exec(line))) return `<div class="wa-quote">${renderWhatsAppInline(m[1]) || "<br>"}</div>`;
+            if ((m = /^[-*] (.*)$/.exec(line))) return `<div class="wa-li"><span>•</span><span>${renderWhatsAppInline(m[1])}</span></div>`;
+            if ((m = /^(\d+)\. (.*)$/.exec(line))) return `<div class="wa-li"><span>${m[1]}.</span><span>${renderWhatsAppInline(m[2])}</span></div>`;
+            return `<div>${renderWhatsAppInline(line) || "<br>"}</div>`;
+          })
+          .join("");
+      }
+
+      function renderWhatsApp(text) {
+        const safe = escapeHtml(String(text ?? "").replace(/\u0000/g, ""));
+        return safe
+          .split(/```([\s\S]*?)```/)
+          .map((part, i) =>
+            i % 2 ? `<code class="wa-mono">${part.replace(/^\n|\n$/g, "")}</code>` : part && renderWhatsAppLines(part.replace(/^\n|\n$/g, ""))
+          )
+          .join("");
+      }
+
+      /* =====================================================================
+         CONTACTS & DRAFT STORAGE (localStorage, this browser only)
+         ===================================================================== */
+      const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const saveContacts = (list) => LS.set("wa_contacts", list);
+
+      // Quick picks, computed in Jakarta time.
+      function presetTs(key, now = nowTs()) {
+        if (key === "hour") return Math.ceil((now + 3600) / 60) * 60;
+        const p = jkt(now);
+        const today9 = Date.UTC(p.y, p.m, p.d, 9, 0) / 1000 - TZ_OFFSET;
+        if (key === "tomorrow") return today9 + 86400;
+        if (key === "monday") return today9 + ((8 - p.wd) % 7 || 7) * 86400;
+        return NaN;
+      }
+      // flatpickr builds local Date objects from wall-clock values; this keeps
+      // "today" anchored to Jakarta.
+      function jktTodayLocal() {
+        const p = jkt(nowTs());
+        return new Date(p.y, p.m, p.d);
+      }
 
       /* =====================================================================
          API — contract unchanged (docs/rest_api.md)
@@ -1093,26 +1454,11 @@
       });
       const toast = (message, type) => Alpine.store("toasts").push(message, type);
 
-      // Third-party widget instances live outside Alpine's reactive state.
-      let recipientsSelect = null;
-      let composerPicker = null;
+      // Third-party widget instances and timers live outside Alpine's reactive state.
+      let composerDatePicker = null;
+      let composerTimePicker = null;
       let retryPicker = null;
-
-      function ensureRecipientsSelect() {
-        if (recipientsSelect) return recipientsSelect;
-        recipientsSelect = new Choices(document.getElementById("composerRecipients"), {
-          removeItemButton: true,
-          allowHTML: false,
-          placeholder: true,
-          placeholderValue: "e.g. +62 812 3456 7890 or 1203…@g.us",
-          addItems: true,
-          addChoices: true,
-          duplicateItemsAllowed: false,
-          shouldSort: false,
-          itemSelectText: "",
-        });
-        return recipientsSelect;
-      }
+      let draftTimer = null;
 
       /* =====================================================================
          PAGE — app (auth, routing, messages, modals)
@@ -1134,6 +1480,28 @@
             { value: "scheduled", label: "Scheduled" },
             { value: "sent", label: "Sent" },
             { value: "failed", label: "Failed" },
+          ],
+          pickerFilters: [
+            { value: "all", label: "All" },
+            { value: "favorites", label: "Favorites" },
+            { value: "groups", label: "Groups" },
+            { value: "people", label: "People" },
+          ],
+          toolbar: [
+            { key: "bold", label: "Bold (Ctrl+B)", icon: "bold" },
+            { key: "italic", label: "Italic (Ctrl+I)", icon: "italic" },
+            { key: "strike", label: "Strikethrough", icon: "strike" },
+            { key: "code", label: "Monospace", icon: "code" },
+            { key: "d1", divider: true },
+            { key: "quote", label: "Quote", icon: "quote" },
+            { key: "ul", label: "Bulleted list", icon: "list" },
+            { key: "ol", label: "Numbered list", icon: "list-ordered" },
+            { key: "d2", divider: true },
+          ],
+          presets: [
+            { key: "hour", label: "In 1 hour" },
+            { key: "tomorrow", label: "Tomorrow 09:00" },
+            { key: "monday", label: "Monday 09:00" },
           ],
           retryOptions: [
             { value: "now", label: "Send now", hint: "Retry immediately.", icon: "zap" },
@@ -1164,7 +1532,21 @@
 
           detail: null,
           retry: { open: false, id: null, content: "", failure: "", mode: "now", time: "", error: "", loading: false },
-          composer: { open: false, content: "", time: "", errors: {}, loading: false },
+          composer: {
+            open: false,
+            recipients: [],
+            query: "",
+            content: "",
+            date: "",
+            time: "",
+            preset: null,
+            errors: {},
+            loading: false,
+            saveNew: true,
+            savedAt: 0,
+          },
+          picker: { open: false, filter: "all", active: 0 },
+          emojiOpen: false,
 
           // ---- lifecycle ----
           async init() {
@@ -1175,9 +1557,31 @@
             window.addEventListener("storage", () => this.loadLocal());
 
             this.$nextTick(() => {
-              composerPicker = initDatePicker(document.getElementById("composerTime"), (v) => (this.composer.time = v));
+              composerDatePicker = flatpickr("#composerDate", {
+                dateFormat: "D, j M Y",
+                static: true,
+                disableMobile: true,
+                minDate: jktTodayLocal(),
+                onOpen: (_, __, fp) => fp.set("minDate", jktTodayLocal()),
+                onChange: (dates) => this.onComposerDate(dates[0]),
+              });
+              composerTimePicker = flatpickr("#composerTime", {
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: "H:i",
+                time_24hr: true,
+                minuteIncrement: 1,
+                defaultHour: 9,
+                defaultMinute: 0,
+                static: true,
+                disableMobile: true,
+                onChange: (_, str) => this.onComposerTime(str),
+              });
               retryPicker = initDatePicker(document.getElementById("retryTime"), (v) => (this.retry.time = v));
             });
+            for (const key of ["composer.recipients", "composer.content", "composer.date", "composer.time"]) {
+              this.$watch(key, () => this.queueDraft());
+            }
 
             const token = LS.raw("web_client_token");
             if (!token) {
@@ -1278,12 +1682,14 @@
             if (!this.authed) return;
             if (e.key === "Escape") {
               if (document.querySelector(".flatpickr-calendar.open")) return;
-              if (this.retry.open) this.closeRetry();
+              if (this.emojiOpen) this.emojiOpen = false;
+              else if (this.picker.open) this.picker.open = false;
+              else if (this.retry.open) this.closeRetry();
               else if (this.detail) this.closeDetail();
               else if (this.composer.open) this.closeComposer();
               return;
             }
-            const typing = e.target.closest?.("input, textarea, select, [contenteditable], .choices");
+            const typing = e.target.closest?.("input, textarea, select, [contenteditable], emoji-picker");
             if (typing || e.ctrlKey || e.metaKey || e.altKey || this.anyModalOpen()) return;
             if (e.key === "n" || e.key === "N") {
               e.preventDefault();
@@ -1401,6 +1807,7 @@
           isGroup,
           failureLabel,
           retriedLabel,
+          renderWhatsApp,
 
           rel(ts) {
             return fmtRelative(ts, this.now);
@@ -1496,58 +1903,352 @@
             }
           },
 
-          // ---- composer (interim) ----
-          openComposer(prefill = {}) {
-            Object.assign(this.composer, { open: true, content: prefill.content || "", time: "", errors: {}, loading: false });
+          // ---- composer: open / close / draft ----
+          openComposer(prefill = null) {
+            const draft = prefill ? null : LS.json("wa_draft", null);
+            const src = prefill || draft || {};
+            clearTimeout(draftTimer);
+            Object.assign(this.composer, {
+              open: true,
+              recipients: [...(src.recipients || [])],
+              query: "",
+              content: src.content || "",
+              date: draft?.date || "",
+              time: draft?.time || "",
+              preset: null,
+              errors: {},
+              loading: false,
+              saveNew: true,
+              savedAt: draft?.savedAt || 0,
+            });
+            this.picker.open = false;
+            this.picker.filter = "all";
+            this.emojiOpen = false;
             this.$nextTick(() => {
-              const sel = ensureRecipientsSelect();
-              const picked = prefill.recipients || [];
-              sel.removeActiveItems();
-              const values = [...new Set([...this.defaultNumbers, ...picked])];
-              sel.setChoices(values.map((v) => ({ value: v, label: v })), "value", "label", true);
-              picked.forEach((v) => sel.setChoiceByValue(v));
-              composerPicker?.clear();
+              this.syncTimePickers();
+              setTimeout(() => (this.composer.recipients.length ? this.$refs.editor : this.$refs.recipientInput)?.focus(), 50);
             });
           },
           closeComposer() {
+            if (draftTimer) {
+              clearTimeout(draftTimer);
+              this.saveDraft();
+            }
             this.composer.open = false;
+            this.picker.open = false;
+            this.emojiOpen = false;
           },
+          queueDraft() {
+            if (!this.composer.open || this.composer.loading) return;
+            clearTimeout(draftTimer);
+            draftTimer = setTimeout(() => this.saveDraft(), 600);
+          },
+          saveDraft() {
+            draftTimer = null;
+            const c = this.composer;
+            if (!c.recipients.length && !c.content.trim() && !c.date) {
+              LS.remove("wa_draft");
+              c.savedAt = 0;
+              return;
+            }
+            c.savedAt = nowTs();
+            LS.set("wa_draft", { recipients: c.recipients, content: c.content, date: c.date, time: c.time, savedAt: c.savedAt });
+          },
+          discardDraft() {
+            clearTimeout(draftTimer);
+            draftTimer = null;
+            LS.remove("wa_draft");
+            Object.assign(this.composer, { recipients: [], query: "", content: "", date: "", time: "", preset: null, errors: {}, savedAt: 0 });
+            this.syncTimePickers();
+            toast("Draft discarded.", "info");
+          },
+
+          // ---- composer: recipients ----
+          addRecipient(jid) {
+            if (!this.composer.recipients.includes(jid)) this.composer.recipients.push(jid);
+            delete this.composer.errors.recipients;
+          },
+          removeRecipient(jid) {
+            this.composer.recipients = this.composer.recipients.filter((r) => r !== jid);
+          },
+          toggleRecipient(jid) {
+            this.composer.recipients.includes(jid) ? this.removeRecipient(jid) : this.addRecipient(jid);
+          },
+          // Turn typed text (one or more numbers) into chips; invalid parts stay
+          // in the input with an error that says how to fix them.
+          commitQuery() {
+            const c = this.composer;
+            const parts = c.query.split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
+            const rejected = [];
+            let error = "";
+            for (const p of parts) {
+              const n = normalizeRecipient(p);
+              if (n.ok) this.addRecipient(n.jid);
+              else {
+                rejected.push(p);
+                error ||= n.error;
+              }
+            }
+            c.query = rejected.join(", ");
+            if (error) c.errors.recipients = error;
+            return !error;
+          },
+          onRecipientKey(e) {
+            if (e.ctrlKey || e.metaKey) return;
+            const c = this.composer;
+            const opts = this.pickerOptions();
+            if (e.key === "Enter" || e.key === "," || e.key === ";") {
+              e.preventDefault();
+              const opt = this.picker.open ? opts[this.picker.active] : null;
+              if (opt && (c.query.trim() || e.key === "Enter")) this.chooseOption(opt);
+              else if (c.query.trim()) this.commitQuery();
+            } else if (e.key === "Backspace" && !c.query && c.recipients.length) {
+              c.recipients.pop();
+            } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              this.picker.open = true;
+              if (!opts.length) return;
+              const step = e.key === "ArrowDown" ? 1 : -1;
+              this.picker.active = (this.picker.active + step + opts.length) % opts.length;
+            } else if (e.key === "Escape" && this.picker.open) {
+              e.stopPropagation();
+              this.picker.open = false;
+            }
+          },
+          onRecipientBlur() {
+            this.picker.open = false;
+            if (this.composer.query.trim()) this.commitQuery();
+          },
+          onRecipientPaste(e) {
+            const text = e.clipboardData?.getData("text") || "";
+            if (!/[,;\n]/.test(text)) return;
+            e.preventDefault();
+            this.composer.query += text;
+            this.commitQuery();
+          },
+          chooseOption(opt) {
+            if (opt.isNew) this.addRecipient(opt.jid);
+            else this.toggleRecipient(opt.jid);
+            this.composer.query = "";
+            this.picker.active = 0;
+          },
+
+          // ---- composer: contact picker ----
+          subtitleFor(jid) {
+            return isGroup(jid) ? jid : formatPhone(jid.split("@")[0]);
+          },
+          pickerEntries() {
+            const out = this.contacts.map((c) => ({
+              key: "c:" + c.id,
+              contactId: c.id,
+              jid: c.jid,
+              title: c.name || this.displayRecipient(c.jid),
+              subtitle: this.subtitleFor(c.jid),
+              favorite: !!c.favorite,
+              tag: "",
+            }));
+            for (const jid of this.defaultNumbers) {
+              if (!this.contacts.some((c) => c.jid === jid)) {
+                out.push({ key: "d:" + jid, jid, title: this.displayRecipient(jid), subtitle: this.subtitleFor(jid), favorite: false, tag: "Default" });
+              }
+            }
+            return out.sort((a, b) => b.favorite - a.favorite || a.title.localeCompare(b.title));
+          },
+          pickerMatchesFilter(entry, filter) {
+            if (filter === "favorites") return entry.favorite;
+            if (filter === "groups") return isGroup(entry.jid);
+            if (filter === "people") return !isGroup(entry.jid);
+            return true;
+          },
+          pickerCount(filter) {
+            return this.pickerEntries().filter((e) => this.pickerMatchesFilter(e, filter)).length;
+          },
+          pickerOptions() {
+            const q = this.composer.query.trim().toLowerCase();
+            let digits = q.replace(/\D/g, "");
+            if (digits.startsWith("0")) digits = "62" + digits.slice(1);
+            const options = this.pickerEntries().filter(
+              (e) =>
+                this.pickerMatchesFilter(e, this.picker.filter) &&
+                (!q || e.title.toLowerCase().includes(q) || e.jid.toLowerCase().includes(q) || (digits.length >= 3 && e.jid.includes(digits)))
+            );
+            const typed = q && !/[,;]/.test(q) ? normalizeRecipient(q) : null;
+            if (typed?.ok && !this.pickerEntries().some((e) => e.jid === typed.jid)) {
+              options.unshift({
+                key: "new:" + typed.jid,
+                isNew: true,
+                jid: typed.jid,
+                title: "Add " + this.displayRecipient(typed.jid),
+                subtitle: "Press Enter to add this number",
+              });
+            }
+            return options;
+          },
+          favorites() {
+            return this.contacts.filter((c) => c.favorite);
+          },
+          toggleFavorite(id) {
+            this.contacts = this.contacts.map((c) => (c.id === id ? { ...c, favorite: !c.favorite } : c));
+            saveContacts(this.contacts);
+          },
+          unsavedRecipients() {
+            return this.composer.recipients.filter((j) => !this.contacts.some((c) => c.jid === j) && !this.defaultNumbers.includes(j));
+          },
+          saveNewRecipients() {
+            const fresh = this.unsavedRecipients().map((jid) => ({
+              id: uid(),
+              name: this.displayRecipient(jid),
+              jid,
+              group: "",
+              favorite: false,
+              createdAt: nowTs(),
+            }));
+            if (!fresh.length) return 0;
+            this.contacts = [...this.contacts, ...fresh];
+            saveContacts(this.contacts);
+            return fresh.length;
+          },
+          starIcon(filled, size = 16) {
+            return icon("star", size, filled ? { fill: "currentColor" } : {});
+          },
+
+          // ---- composer: editor ----
+          onEditorKey(e) {
+            if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+            const k = e.key.toLowerCase();
+            if (k === "b" || k === "i") {
+              e.preventDefault();
+              this.applyTool(k === "b" ? "bold" : "italic");
+            }
+          },
+          applyTool(key) {
+            const wrap = { bold: "*", italic: "_", strike: "~", code: "```" }[key];
+            if (wrap) this.wrapSelection(wrap);
+            else this.prefixLines(key);
+          },
+          // Replace a range in the textarea through the browser's editing
+          // pipeline so Ctrl+Z still works; fall back to setRangeText.
+          replaceRange(from, to, text, selStart, selEnd) {
+            const ta = this.$refs.editor;
+            ta.focus();
+            ta.setSelectionRange(from, to);
+            let done = false;
+            try {
+              done = document.execCommand("insertText", false, text);
+            } catch {}
+            if (!done || ta.value.slice(from, from + text.length) !== text) {
+              ta.setRangeText(text, from, to, "end");
+              ta.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+            ta.setSelectionRange(selStart, selEnd);
+          },
+          wrapSelection(marker) {
+            const ta = this.$refs.editor;
+            const v = ta.value;
+            const s = ta.selectionStart;
+            const e = ta.selectionEnd;
+            const n = marker.length;
+            if (s >= n && v.slice(s - n, s) === marker && v.slice(e, e + n) === marker) {
+              this.replaceRange(s - n, e + n, v.slice(s, e), s - n, e - n);
+              return;
+            }
+            const inner = v.slice(s, e);
+            this.replaceRange(s, e, marker + inner + marker, s + n, s + n + inner.length);
+          },
+          prefixLines(key) {
+            const ta = this.$refs.editor;
+            const v = ta.value;
+            const s = ta.selectionStart;
+            let e = ta.selectionEnd;
+            if (e > s && v[e - 1] === "\n") e--;
+            const start = v.lastIndexOf("\n", s - 1) + 1;
+            let end = v.indexOf("\n", e);
+            if (end === -1) end = v.length;
+            const lines = v.slice(start, end).split("\n");
+            const own = { quote: /^> ?/, ul: /^[-*] /, ol: /^\d+\. / }[key];
+            const any = /^(> ?|[-*] |\d+\. )/;
+            const text = lines.every((l) => own.test(l))
+              ? lines.map((l) => l.replace(own, "")).join("\n")
+              : lines.map((l, i) => ({ quote: "> ", ul: "- ", ol: `${i + 1}. ` }[key] + l.replace(any, ""))).join("\n");
+            this.replaceRange(start, end, text, start, start + text.length);
+          },
+          insertText(str) {
+            const ta = this.$refs.editor;
+            const s = ta.selectionStart;
+            this.replaceRange(s, ta.selectionEnd, str, s + str.length, s + str.length);
+          },
+
+          // ---- composer: send time ----
           composerTs() {
-            const ts = parseJakartaInput(this.composer.time);
+            const ts = parseJakartaInput(`${this.composer.date} ${this.composer.time}`);
             return isNaN(ts) ? 0 : ts;
           },
+          syncTimePickers() {
+            const c = this.composer;
+            if (c.date) composerDatePicker?.setDate(c.date, false, "Y-m-d");
+            else composerDatePicker?.clear(false);
+            if (c.time) composerTimePicker?.setDate(c.time, false, "H:i");
+            else composerTimePicker?.clear(false);
+          },
+          onComposerDate(d) {
+            const c = this.composer;
+            c.date = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : "";
+            if (c.date && !c.time) {
+              c.time = "09:00";
+              composerTimePicker?.setDate(c.time, false, "H:i");
+            }
+            c.preset = null;
+            delete c.errors.time;
+          },
+          onComposerTime(str) {
+            const c = this.composer;
+            c.time = str;
+            if (str && !c.date) {
+              c.date = toJakartaInput(nowTs()).slice(0, 10);
+              composerDatePicker?.setDate(c.date, false, "Y-m-d");
+            }
+            c.preset = null;
+            delete c.errors.time;
+          },
+          applyPreset(key) {
+            const s = toJakartaInput(presetTs(key));
+            Object.assign(this.composer, { date: s.slice(0, 10), time: s.slice(11), preset: key });
+            delete this.composer.errors.time;
+            this.syncTimePickers();
+          },
+
+          // ---- composer: submit ----
           async submitComposer() {
             const c = this.composer;
-            const errors = {};
+            if (c.loading) return;
+            if (c.query.trim()) this.commitQuery();
 
-            const raw = ensureRecipientsSelect().getValue(true);
-            const recipients = [];
-            for (const r of raw) {
-              const n = normalizeRecipient(r);
-              if (n.ok) recipients.push(n.jid);
-              else if (!errors.recipients) errors.recipients = n.error;
-            }
-            if (!raw.length) errors.recipients = "Add at least one recipient: type a number with country code and press Enter.";
+            const errors = {};
+            if (c.errors.recipients) errors.recipients = c.errors.recipients;
+            else if (!c.recipients.length) errors.recipients = "Add at least one recipient: pick a contact or type a number with country code.";
 
             if (!c.content.trim()) errors.content = "Write a message before scheduling.";
 
-            const ts = parseJakartaInput(c.time);
-            if (!c.time) errors.time = "Pick a send time.";
-            else if (isNaN(ts)) errors.time = "Pick a valid date and time.";
+            const ts = this.composerTs();
+            if (!c.date || !c.time) errors.time = "Pick a send date and time, or use a quick option.";
+            else if (!ts) errors.time = "Pick a valid date and time.";
             else if (ts < nowTs() - 60) errors.time = "This time has already passed. Pick a time in the future.";
 
             c.errors = errors;
             if (Object.keys(errors).length) return;
 
             c.loading = true;
+            clearTimeout(draftTimer);
             try {
-              await api.schedule({
-                recipient_numbers: [...new Set(recipients)],
-                content: c.content,
-                scheduled_sending_at: ts,
-              });
-              toast(`Message scheduled for ${fmtWhen(ts)} (GMT+7).`);
-              this.closeComposer();
+              await api.schedule({ recipient_numbers: [...c.recipients], content: c.content, scheduled_sending_at: ts });
+              const saved = c.saveNew ? this.saveNewRecipients() : 0;
+              LS.remove("wa_draft");
+              c.savedAt = 0;
+              toast(`Message scheduled for ${fmtWhen(ts)} (GMT+7).` + (saved ? ` ${plural(saved, "contact", "contacts")} saved.` : ""));
+              c.loading = false;
+              this.composer.open = false;
+              this.picker.open = false;
+              this.emojiOpen = false;
               await this.refresh();
             } catch (e) {
               this.handleError(e, "Couldn't schedule the message.");
