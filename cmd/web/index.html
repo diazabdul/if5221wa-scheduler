@@ -559,18 +559,175 @@
         </section>
 
         <!-- =============================================================
-             PAGE: Contacts / Templates (placeholders until iteration 1c)
+             PAGE: Contacts (no Figma frame: built from Design System parts)
              ============================================================= -->
-        <template x-for="p in placeholderPages" :key="p.route">
-          <section x-show="route === p.route" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8">
-            <h1 class="text-display font-bold" x-text="p.label"></h1>
-            <div class="card flex flex-col items-center gap-3 px-6 py-14 text-center">
-              <span class="flex size-11 items-center justify-center rounded-full bg-page text-ink-muted" x-html="icon(p.icon, 22)"></span>
-              <p class="text-body text-ink-secondary" x-text="p.label + ' arrive in the next update.'"></p>
-              <a href="#/messages" class="btn btn-primary">Back to messages</a>
+        <section x-show="route === 'contacts'" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 class="text-display font-bold">Contacts</h1>
+              <p class="mt-1 text-body text-ink-muted">People and groups you send to. Saved in this browser only.</p>
             </div>
-          </section>
-        </template>
+            <button type="button" class="btn btn-primary btn-lg" @click="openContactForm()">
+              <span x-html="icon('plus', 18)"></span>
+              New contact
+            </button>
+          </div>
+
+          <div class="card overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <div class="flex gap-0.5 rounded-10 bg-page p-[3px]" role="tablist" aria-label="Filter contacts">
+                <template x-for="f in pickerFilters" :key="f.value">
+                  <button
+                    type="button"
+                    role="tab"
+                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    :class="contactFilter === f.value ? 'border-line bg-surface font-semibold text-ink' : 'border-transparent font-medium text-ink-secondary hover:text-ink'"
+                    :aria-selected="contactFilter === f.value"
+                    @click="contactFilter = f.value"
+                  >
+                    <span x-text="f.label"></span>
+                    <span class="count" x-text="contactCount(f.value)"></span>
+                  </button>
+                </template>
+              </div>
+              <label class="relative block w-full md:w-[280px]">
+                <span class="sr-only">Search contacts</span>
+                <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 16)"></span>
+                <input type="search" class="input h-9 pl-9 text-small" placeholder="Search name, number or group" x-model="contactSearch" />
+              </label>
+            </div>
+
+            <div class="overflow-x-auto" x-show="filteredContacts().length">
+              <table class="w-full min-w-[760px] table-fixed border-t border-line text-left">
+                <thead class="bg-subtle">
+                  <tr class="border-b border-line text-caption font-semibold text-ink-muted">
+                    <th scope="col" class="py-2.5 pl-5 pr-2 font-semibold">Name</th>
+                    <th scope="col" class="w-[260px] px-2 py-2.5 font-semibold">Number or group ID</th>
+                    <th scope="col" class="w-[180px] px-2 py-2.5 font-semibold">Group</th>
+                    <th scope="col" class="w-[150px] py-2.5 pl-2 pr-5 font-semibold"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="c in filteredContacts()" :key="c.id">
+                    <tr class="border-b border-line transition-colors hover:bg-subtle">
+                      <td class="py-3 pl-5 pr-2">
+                        <div class="flex min-w-0 items-center gap-3">
+                          <span class="avatar size-8 text-small">
+                            <span x-show="avatarIcon(c.jid)" x-html="icon(avatarIcon(c.jid), 16)"></span>
+                            <span x-show="!avatarIcon(c.jid)" x-text="initialOf(c.name)"></span>
+                          </span>
+                          <span class="truncate text-body font-semibold" x-text="c.name"></span>
+                          <button
+                            type="button"
+                            class="shrink-0 rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                            :class="c.favorite ? 'text-brand' : 'text-line-strong hover:text-ink-muted'"
+                            @click="toggleFavorite(c.id)"
+                            :aria-label="(c.favorite ? 'Remove from favorites: ' : 'Add to favorites: ') + c.name"
+                            :aria-pressed="c.favorite"
+                            x-html="starIcon(c.favorite)"
+                          ></button>
+                        </div>
+                      </td>
+                      <td class="truncate px-2 py-3 text-small text-ink-secondary" x-text="subtitleFor(c.jid)" :title="c.jid"></td>
+                      <td class="px-2 py-3">
+                        <span x-show="c.group" class="count h-[22px] max-w-full truncate px-2.5 text-caption font-medium" x-text="c.group"></span>
+                        <span x-show="!c.group" class="text-small text-ink-muted">—</span>
+                      </td>
+                      <td class="py-3 pl-2 pr-5">
+                        <div class="flex items-center justify-end gap-1">
+                          <button type="button" class="btn-icon" @click="messageContact(c)" :aria-label="'New message to ' + c.name" title="New message">
+                            <span x-html="icon('send', 16)"></span>
+                          </button>
+                          <button type="button" class="btn-icon" @click="openContactForm(c)" :aria-label="'Edit ' + c.name" title="Edit">
+                            <span x-html="icon('edit-2', 16)"></span>
+                          </button>
+                          <button type="button" class="btn-icon hover:bg-failed-bg hover:text-failed-fg" @click="deleteContact(c)" :aria-label="'Delete ' + c.name" title="Delete">
+                            <span x-html="icon('trash-2', 16)"></span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <div x-show="!filteredContacts().length" class="flex flex-col items-center gap-3 border-t border-line px-6 py-14 text-center">
+              <span class="flex size-11 items-center justify-center rounded-full bg-page text-ink-muted" x-html="icon(contactSearch ? 'search' : 'book', 22)"></span>
+              <p class="text-body text-ink-secondary" x-text="contactEmptyText()"></p>
+              <button type="button" x-show="contactSearch" class="btn btn-secondary" @click="contactSearch = ''">Clear search</button>
+              <button type="button" x-show="!contactSearch" class="btn btn-primary" @click="openContactForm()">
+                <span x-html="icon('plus', 16)"></span>
+                New contact
+              </button>
+            </div>
+
+            <div class="border-t border-line bg-subtle px-5 py-3 text-caption text-ink-muted" x-text="plural(contacts.length, 'contact', 'contacts') + ' saved · stored in this browser'"></div>
+          </div>
+        </section>
+
+        <!-- =============================================================
+             PAGE: Templates (no Figma frame: built from Design System parts)
+             ============================================================= -->
+        <section x-show="route === 'templates'" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 class="text-display font-bold">Templates</h1>
+              <p class="mt-1 text-body text-ink-muted">Reusable messages you can insert while composing. Saved in this browser only.</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-lg" @click="openTemplateForm()">
+              <span x-html="icon('plus', 18)"></span>
+              New template
+            </button>
+          </div>
+
+          <div class="card overflow-hidden">
+            <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3.5">
+              <label class="relative block w-full md:w-[280px]">
+                <span class="sr-only">Search templates</span>
+                <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 16)"></span>
+                <input type="search" class="input h-9 pl-9 text-small" placeholder="Search name or text" x-model="templateSearch" />
+              </label>
+            </div>
+
+            <ul x-show="filteredTemplates().length" class="border-t border-line">
+              <template x-for="t in filteredTemplates()" :key="t.id">
+                <li class="flex items-center gap-4 border-b border-line px-5 py-4 transition-colors hover:bg-subtle">
+                  <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand" x-html="icon('file-text', 16)"></span>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-body font-semibold" x-text="t.name"></p>
+                    <p class="mt-0.5 truncate text-small text-ink-secondary" x-text="oneLine(plainWhatsApp(t.content))" :title="t.content"></p>
+                  </div>
+                  <span class="hidden shrink-0 text-caption text-ink-muted md:inline" x-text="'Updated ' + fmtWhen(t.updatedAt || t.createdAt)"></span>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button type="button" class="btn btn-sm btn-outline mr-1" @click="useTemplate(t)">
+                      <span x-html="icon('send', 14)"></span>
+                      Use
+                    </button>
+                    <button type="button" class="btn-icon" @click="openTemplateForm(t)" :aria-label="'Edit ' + t.name" title="Edit">
+                      <span x-html="icon('edit-2', 16)"></span>
+                    </button>
+                    <button type="button" class="btn-icon hover:bg-failed-bg hover:text-failed-fg" @click="deleteTemplate(t)" :aria-label="'Delete ' + t.name" title="Delete">
+                      <span x-html="icon('trash-2', 16)"></span>
+                    </button>
+                  </div>
+                </li>
+              </template>
+            </ul>
+
+            <div x-show="!filteredTemplates().length" class="flex flex-col items-center gap-3 border-t border-line px-6 py-14 text-center">
+              <span class="flex size-11 items-center justify-center rounded-full bg-page text-ink-muted" x-html="icon(templateSearch ? 'search' : 'file-text', 22)"></span>
+              <p class="text-body text-ink-secondary" x-text="templateSearch ? 'No templates match “' + templateSearch.trim() + '”.' : 'No templates yet. Save a message you send often.'"></p>
+              <button type="button" x-show="templateSearch" class="btn btn-secondary" @click="templateSearch = ''">Clear search</button>
+              <button type="button" x-show="!templateSearch" class="btn btn-primary" @click="openTemplateForm()">
+                <span x-html="icon('plus', 16)"></span>
+                New template
+              </button>
+            </div>
+
+            <div class="border-t border-line bg-subtle px-5 py-3 text-caption text-ink-muted" x-text="plural(templates.length, 'template', 'templates') + ' saved · stored in this browser'"></div>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -759,7 +916,44 @@
 
             <!-- Message -->
             <div class="flex flex-col gap-2">
-              <label for="composerContent" class="text-label font-medium text-ink-secondary">Message</label>
+              <div class="flex items-center justify-between">
+                <label for="composerContent" class="text-label font-medium text-ink-secondary">Message</label>
+                <div class="relative" @click.outside="templateMenuOpen = false">
+                  <button
+                    type="button"
+                    class="inline-flex h-7 items-center gap-1.5 rounded-lg border border-line-strong px-2.5 text-caption font-medium text-ink-secondary transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    @click="templateMenuOpen = !templateMenuOpen"
+                    :aria-expanded="templateMenuOpen"
+                    aria-haspopup="menu"
+                  >
+                    <span x-html="icon('bookmark', 14)"></span>
+                    Insert template
+                    <span x-html="icon('chevron-down', 14)"></span>
+                  </button>
+                  <div
+                    x-show="templateMenuOpen"
+                    x-transition.opacity.duration.100ms
+                    class="absolute right-0 top-full z-30 mt-1 w-[320px] overflow-hidden rounded-xl border border-line-strong bg-surface shadow-dropdown"
+                    role="menu"
+                  >
+                    <div class="max-h-[280px] overflow-y-auto p-1.5">
+                      <template x-for="t in filteredTemplates()" :key="t.id">
+                        <button type="button" role="menuitem" class="block w-full rounded-lg px-2.5 py-2 text-left hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-none" @click="insertTemplate(t)">
+                          <span class="block truncate text-body font-semibold" x-text="t.name"></span>
+                          <span class="block truncate text-caption text-ink-muted" x-text="oneLine(plainWhatsApp(t.content))"></span>
+                        </button>
+                      </template>
+                      <p x-show="!templates.length" class="px-2.5 py-4 text-center text-small text-ink-muted">No templates yet. Tick “Save message as template” below, or create one on the Templates page.</p>
+                    </div>
+                    <div class="border-t border-line bg-subtle px-4 py-2.5">
+                      <a href="#/templates" class="inline-flex items-center gap-1.5 text-small font-semibold text-brand hover:underline" @click="closeComposer()">
+                        <span x-html="icon('file-text', 14)"></span>
+                        Manage templates
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div
                 class="rounded-lg border bg-surface transition-colors focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20"
                 :class="composer.errors.content ? 'border-failed-fg' : 'border-line-strong'"
@@ -902,6 +1096,10 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line px-7 py-4">
           <div class="flex items-center gap-4">
+            <label class="inline-flex cursor-pointer items-center gap-2 text-small text-ink-secondary">
+              <input type="checkbox" class="size-[18px] cursor-pointer accent-brand" x-model="composer.saveTemplate" />
+              Save message as template
+            </label>
             <button type="button" x-show="composer.savedAt" class="btn-text text-small font-medium text-ink-secondary" @click="discardDraft()">
               Discard draft
             </button>
@@ -1088,6 +1286,110 @@
             <span x-show="!retry.loading" x-html="icon(retry.mode === 'later' ? 'clock' : 'zap', 16)"></span>
             <span x-text="retry.loading ? 'Retrying…' : (retry.mode === 'later' ? 'Schedule retry' : 'Retry now')"></span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         TEMPLATE: Contact form (add / edit)
+         =================================================================== -->
+    <div x-show="contactForm.open" x-cloak class="modal-scrim" @mousedown.self="contactForm.open = false" x-transition.opacity>
+      <div class="modal max-w-[480px]" role="dialog" aria-modal="true" aria-labelledby="contactFormTitle" x-trap.noscroll="contactForm.open">
+        <div class="modal-header">
+          <h2 id="contactFormTitle" class="text-modal-title font-semibold" x-text="contactForm.id ? 'Edit contact' : 'New contact'"></h2>
+          <button type="button" class="btn-icon" @click="contactForm.open = false" aria-label="Close">
+            <span x-html="icon('x', 20)"></span>
+          </button>
+        </div>
+        <form id="contactFormEl" class="space-y-4 px-6 py-5" @submit.prevent="submitContactForm()" novalidate>
+          <div>
+            <label for="contactName" class="field-label">Name</label>
+            <input id="contactName" x-ref="contactName" type="text" class="input" :class="contactForm.errors.name ? 'input-invalid' : ''" placeholder="e.g. Rina (Lab)" x-model="contactForm.name" @input="delete contactForm.errors.name" />
+            <p class="field-error" x-show="contactForm.errors.name"><span x-html="icon('alert-circle', 14)"></span><span x-text="contactForm.errors.name"></span></p>
+          </div>
+          <div>
+            <label for="contactNumber" class="field-label">Number or group ID</label>
+            <input id="contactNumber" type="text" class="input" :class="contactForm.errors.number ? 'input-invalid' : ''" placeholder="+62 8xx xxxx xxxx" x-model="contactForm.number" @input="delete contactForm.errors.number" @blur="checkContactNumber()" />
+            <p class="field-error" x-show="contactForm.errors.number"><span x-html="icon('alert-circle', 14)"></span><span x-text="contactForm.errors.number"></span></p>
+            <p class="field-hint" x-show="!contactForm.errors.number">Include the country code. Group IDs end in @g.us.</p>
+          </div>
+          <div>
+            <label for="contactGroup" class="field-label">Group <span class="font-normal text-ink-muted">(optional)</span></label>
+            <input id="contactGroup" type="text" class="input" list="contactGroupList" placeholder="e.g. Lab, Family" x-model="contactForm.group" />
+            <datalist id="contactGroupList">
+              <template x-for="g in contactGroups()" :key="g"><option :value="g"></option></template>
+            </datalist>
+            <p class="field-hint">Use groups to find related contacts quickly.</p>
+          </div>
+          <label class="inline-flex cursor-pointer items-center gap-2 text-small text-ink-secondary">
+            <input type="checkbox" class="size-[18px] cursor-pointer accent-brand" x-model="contactForm.favorite" />
+            Show in favorites
+          </label>
+        </form>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="contactForm.open = false">Cancel</button>
+          <button type="submit" form="contactFormEl" class="btn btn-primary" x-text="contactForm.id ? 'Save changes' : 'Save contact'"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         TEMPLATE: Template form (add / edit)
+         =================================================================== -->
+    <div x-show="templateForm.open" x-cloak class="modal-scrim" @mousedown.self="templateForm.open = false" x-transition.opacity>
+      <div class="modal max-w-[640px]" role="dialog" aria-modal="true" aria-labelledby="templateFormTitle" x-trap.noscroll="templateForm.open">
+        <div class="modal-header">
+          <h2 id="templateFormTitle" class="text-modal-title font-semibold" x-text="templateForm.id ? 'Edit template' : 'New template'"></h2>
+          <button type="button" class="btn-icon" @click="templateForm.open = false" aria-label="Close">
+            <span x-html="icon('x', 20)"></span>
+          </button>
+        </div>
+        <form id="templateFormEl" class="space-y-4 px-6 py-5" @submit.prevent="submitTemplateForm()" novalidate>
+          <div>
+            <label for="templateName" class="field-label">Name</label>
+            <input id="templateName" x-ref="templateName" type="text" class="input" :class="templateForm.errors.name ? 'input-invalid' : ''" placeholder="e.g. Weekly sync reminder" x-model="templateForm.name" @input="delete templateForm.errors.name" />
+            <p class="field-error" x-show="templateForm.errors.name"><span x-html="icon('alert-circle', 14)"></span><span x-text="templateForm.errors.name"></span></p>
+          </div>
+          <div>
+            <label for="templateContent" class="field-label">Message</label>
+            <textarea id="templateContent" rows="7" class="input h-auto min-h-[190px] py-2.5 leading-[22px]" :class="templateForm.errors.content ? 'input-invalid' : ''" placeholder="Write the message. WhatsApp formatting: *bold* _italic_ ~strike~" x-model="templateForm.content" @input="delete templateForm.errors.content"></textarea>
+            <div class="flex items-start justify-between gap-3">
+              <p class="field-error" x-show="templateForm.errors.content"><span x-html="icon('alert-circle', 14)"></span><span x-text="templateForm.errors.content"></span></p>
+              <span class="field-hint ml-auto" x-text="plural(templateForm.content.length, 'character', 'characters')"></span>
+            </div>
+          </div>
+          <div x-show="templateForm.content.trim()">
+            <p class="field-label">WhatsApp preview</p>
+            <div class="flex flex-col items-end rounded-10 bg-chat-bg px-4 py-4">
+              <div class="wa-bubble max-w-[320px] break-words rounded-lg bg-chat-bubble px-3 py-2 text-small leading-[19px] text-ink shadow-sm" x-html="renderWhatsApp(templateForm.content)"></div>
+            </div>
+          </div>
+        </form>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="templateForm.open = false">Cancel</button>
+          <button type="submit" form="templateFormEl" class="btn btn-primary" x-text="templateForm.id ? 'Save changes' : 'Save template'"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         TEMPLATE: Confirm dialog (destructive actions name the item)
+         =================================================================== -->
+    <div x-show="confirm.open" x-cloak class="modal-scrim z-[55]" @mousedown.self="resolveConfirm(false)" x-transition.opacity>
+      <div class="modal max-w-[420px]" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmBody" x-trap.noscroll="confirm.open">
+        <div class="px-6 pb-2 pt-6">
+          <h2 id="confirmTitle" class="text-modal-title font-semibold" x-text="confirm.title"></h2>
+          <p id="confirmBody" class="mt-2 text-body text-ink-secondary" x-text="confirm.body"></p>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 pb-6 pt-4">
+          <button type="button" class="btn btn-secondary" @click="resolveConfirm(false)">Cancel</button>
+          <button
+            type="button"
+            class="btn"
+            :class="confirm.danger ? 'border border-failed-fg bg-surface text-failed-fg hover:bg-failed-bg' : 'btn-primary'"
+            @click="resolveConfirm(true)"
+            x-text="confirm.confirmLabel"
+          ></button>
         </div>
       </div>
     </div>
@@ -1381,6 +1683,7 @@
          ===================================================================== */
       const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       const saveContacts = (list) => LS.set("wa_contacts", list);
+      const saveTemplates = (list) => LS.set("wa_templates", list);
 
       // Quick picks, computed in Jakarta time.
       function presetTs(key, now = nowTs()) {
@@ -1466,6 +1769,7 @@
       let composerTimePicker = null;
       let retryPicker = null;
       let draftTimer = null;
+      let confirmResolve = null;
 
       /* =====================================================================
          PAGE — app (auth, routing, messages, modals)
@@ -1475,10 +1779,6 @@
           TZ_LABEL,
           navItems: [
             { route: "messages", label: "Messages", icon: "message-square" },
-            { route: "contacts", label: "Contacts", icon: "book" },
-            { route: "templates", label: "Templates", icon: "file-text" },
-          ],
-          placeholderPages: [
             { route: "contacts", label: "Contacts", icon: "book" },
             { route: "templates", label: "Templates", icon: "file-text" },
           ],
@@ -1550,10 +1850,18 @@
             errors: {},
             loading: false,
             saveNew: true,
+            saveTemplate: false,
             savedAt: 0,
           },
           picker: { open: false, filter: "all", active: 0 },
           emojiOpen: false,
+          templateMenuOpen: false,
+          contactFilter: "all",
+          contactSearch: "",
+          templateSearch: "",
+          contactForm: { open: false, id: null, name: "", number: "", group: "", favorite: false, errors: {} },
+          templateForm: { open: false, id: null, name: "", content: "", errors: {} },
+          confirm: { open: false, title: "", body: "", confirmLabel: "Confirm", danger: false },
 
           // ---- lifecycle ----
           async init() {
@@ -1676,21 +1984,28 @@
           },
 
           anyModalOpen() {
-            return this.composer.open || this.retry.open || !!this.detail;
+            return this.composer.open || this.retry.open || !!this.detail || this.contactForm.open || this.templateForm.open || this.confirm.open;
           },
 
           closeAll() {
+            if (this.confirm.open) this.resolveConfirm(false);
             this.retry.open = false;
             this.detail = null;
             this.composer.open = false;
+            this.contactForm.open = false;
+            this.templateForm.open = false;
           },
 
           onKey(e) {
             if (!this.authed) return;
             if (e.key === "Escape") {
               if (document.querySelector(".flatpickr-calendar.open")) return;
-              if (this.emojiOpen) this.emojiOpen = false;
+              if (this.confirm.open) this.resolveConfirm(false);
+              else if (this.templateMenuOpen) this.templateMenuOpen = false;
+              else if (this.emojiOpen) this.emojiOpen = false;
               else if (this.picker.open) this.picker.open = false;
+              else if (this.contactForm.open) this.contactForm.open = false;
+              else if (this.templateForm.open) this.templateForm.open = false;
               else if (this.retry.open) this.closeRetry();
               else if (this.detail) this.closeDetail();
               else if (this.composer.open) this.closeComposer();
@@ -1917,6 +2232,207 @@
             }
           },
 
+          // ---- confirm dialog ----
+          askConfirm(opts) {
+            confirmResolve?.(false);
+            return new Promise((resolve) => {
+              confirmResolve = resolve;
+              Object.assign(this.confirm, { open: true, title: "", body: "", confirmLabel: "Confirm", danger: false, ...opts });
+            });
+          },
+          resolveConfirm(value) {
+            this.confirm.open = false;
+            const resolve = confirmResolve;
+            confirmResolve = null;
+            resolve?.(value);
+          },
+
+          // ---- contacts page ----
+          contactCount(filter) {
+            return this.contacts.filter((c) => this.pickerMatchesFilter(c, filter)).length;
+          },
+          filteredContacts() {
+            const q = this.contactSearch.trim().toLowerCase();
+            const digits = q.replace(/\D/g, "");
+            return this.contacts
+              .filter((c) => this.pickerMatchesFilter(c, this.contactFilter))
+              .filter(
+                (c) =>
+                  !q ||
+                  c.name.toLowerCase().includes(q) ||
+                  (c.group || "").toLowerCase().includes(q) ||
+                  c.jid.includes(q) ||
+                  (digits.length >= 3 && c.jid.includes(digits.startsWith("0") ? "62" + digits.slice(1) : digits))
+              )
+              .sort((a, b) => !!b.favorite - !!a.favorite || a.name.localeCompare(b.name));
+          },
+          contactEmptyText() {
+            if (this.contactSearch) return `No contacts match “${this.contactSearch.trim()}”.`;
+            if (this.contactFilter === "favorites") return "No favorites yet. Star a contact to pin it here and in the composer.";
+            if (this.contactFilter === "groups") return "No WhatsApp groups saved yet.";
+            if (this.contactFilter === "people") return "No people saved yet.";
+            return "No contacts yet. Save the numbers and groups you send to most.";
+          },
+          contactGroups() {
+            return [...new Set(this.contacts.map((c) => (c.group || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+          },
+          openContactForm(c = null) {
+            Object.assign(this.contactForm, {
+              open: true,
+              id: c?.id || null,
+              name: c?.name || "",
+              number: c ? this.subtitleFor(c.jid) : "",
+              group: c?.group || "",
+              favorite: !!c?.favorite,
+              errors: {},
+            });
+            this.$nextTick(() => setTimeout(() => this.$refs.contactName?.focus(), 50));
+          },
+          checkContactNumber() {
+            const f = this.contactForm;
+            if (!f.number.trim()) return;
+            const n = normalizeRecipient(f.number);
+            if (!n.ok) return (f.errors.number = n.error);
+            const dup = this.contacts.find((c) => c.jid === n.jid && c.id !== f.id);
+            if (dup) f.errors.number = `This number is already saved as “${dup.name}”.`;
+          },
+          submitContactForm() {
+            const f = this.contactForm;
+            const errors = {};
+            const name = f.name.trim();
+            if (!name) errors.name = "Enter a name, e.g. “Rina (Lab)”.";
+            const n = normalizeRecipient(f.number);
+            if (!n.ok) errors.number = n.error;
+            else {
+              const dup = this.contacts.find((c) => c.jid === n.jid && c.id !== f.id);
+              if (dup) errors.number = `This number is already saved as “${dup.name}”.`;
+            }
+            f.errors = errors;
+            if (Object.keys(errors).length) return;
+
+            const fields = { name, jid: n.jid, group: f.group.trim(), favorite: f.favorite };
+            if (f.id) {
+              this.contacts = this.contacts.map((c) => (c.id === f.id ? { ...c, ...fields, updatedAt: nowTs() } : c));
+            } else {
+              this.contacts = [...this.contacts, { id: uid(), ...fields, createdAt: nowTs() }];
+            }
+            saveContacts(this.contacts);
+            toast(f.id ? `Contact “${name}” updated.` : `Contact “${name}” saved.`);
+            f.open = false;
+          },
+          async deleteContact(c) {
+            const ok = await this.askConfirm({
+              title: "Delete contact?",
+              body: `“${c.name}” will be removed from this browser. Messages already scheduled are not affected.`,
+              confirmLabel: "Delete contact",
+              danger: true,
+            });
+            if (!ok) return;
+            this.contacts = this.contacts.filter((x) => x.id !== c.id);
+            saveContacts(this.contacts);
+            toast(`Contact “${c.name}” deleted.`, "info");
+          },
+          // Adds the contact to the current draft instead of replacing it.
+          messageContact(c) {
+            this.openComposer();
+            this.addRecipient(c.jid);
+          },
+
+          // ---- templates page ----
+          filteredTemplates() {
+            const q = this.templateSearch.trim().toLowerCase();
+            return this.templates
+              .filter((t) => !q || t.name.toLowerCase().includes(q) || t.content.toLowerCase().includes(q))
+              .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+          },
+          openTemplateForm(t = null) {
+            Object.assign(this.templateForm, { open: true, id: t?.id || null, name: t?.name || "", content: t?.content || "", errors: {} });
+            this.$nextTick(() => setTimeout(() => this.$refs.templateName?.focus(), 50));
+          },
+          templateNameTaken(name, exceptId = null) {
+            const key = name.trim().toLowerCase();
+            return this.templates.some((t) => t.name.trim().toLowerCase() === key && t.id !== exceptId);
+          },
+          submitTemplateForm() {
+            const f = this.templateForm;
+            const errors = {};
+            const name = f.name.trim();
+            if (!name) errors.name = "Give the template a short name, e.g. “Weekly sync reminder”.";
+            else if (this.templateNameTaken(name, f.id)) errors.name = `A template named “${name}” already exists. Pick another name.`;
+            if (!f.content.trim()) errors.content = "Write the message this template should insert.";
+            f.errors = errors;
+            if (Object.keys(errors).length) return;
+
+            const now = nowTs();
+            if (f.id) {
+              this.templates = this.templates.map((t) => (t.id === f.id ? { ...t, name, content: f.content, updatedAt: now } : t));
+            } else {
+              this.templates = [...this.templates, { id: uid(), name, content: f.content, createdAt: now, updatedAt: now }];
+            }
+            saveTemplates(this.templates);
+            toast(f.id ? `Template “${name}” updated.` : `Template “${name}” saved.`);
+            f.open = false;
+          },
+          async deleteTemplate(t) {
+            const ok = await this.askConfirm({
+              title: "Delete template?",
+              body: `“${t.name}” will be removed from this browser. Messages already scheduled are not affected.`,
+              confirmLabel: "Delete template",
+              danger: true,
+            });
+            if (!ok) return;
+            this.templates = this.templates.filter((x) => x.id !== t.id);
+            saveTemplates(this.templates);
+            toast(`Template “${t.name}” deleted.`, "info");
+          },
+          // Opens the composer (keeping draft recipients and time) with the template text.
+          async useTemplate(t) {
+            const draft = LS.json("wa_draft", null);
+            if (draft?.content?.trim() && draft.content !== t.content) {
+              const ok = await this.askConfirm({
+                title: "Replace draft message?",
+                body: `Your draft already has a message. Replace it with “${t.name}”? Recipients and send time stay as they are.`,
+                confirmLabel: "Replace message",
+              });
+              if (!ok) return;
+            }
+            this.openComposer();
+            this.composer.content = t.content;
+          },
+          // Composer "Insert template": fills an empty editor, otherwise inserts at the cursor.
+          insertTemplate(t) {
+            this.templateMenuOpen = false;
+            if (!this.composer.content.trim()) {
+              this.composer.content = t.content;
+              this.$nextTick(() => this.$refs.editor?.focus());
+            } else {
+              const ta = this.$refs.editor;
+              const before = ta.value.slice(0, ta.selectionStart);
+              this.insertText((before && !before.endsWith("\n") ? "\n" : "") + t.content);
+            }
+            delete this.composer.errors.content;
+          },
+          saveTemplateFromMessage(content) {
+            const first = oneLine(plainWhatsApp(content.split("\n").find((l) => l.trim()) || "Message"));
+            const base = first.length > 40 ? first.slice(0, 39).trimEnd() + "…" : first;
+            let name = base;
+            for (let i = 2; this.templateNameTaken(name); i++) name = `${base} (${i})`;
+            const now = nowTs();
+            this.templates = [...this.templates, { id: uid(), name, content, createdAt: now, updatedAt: now }];
+            saveTemplates(this.templates);
+            return name;
+          },
+
+          // ---- picker: recent recipients from message history ----
+          recentRecipients() {
+            const seen = new Set();
+            for (const m of [...this.all].sort((a, b) => b.created_at - a.created_at)) {
+              for (const jid of m.recipient_numbers) seen.add(jid);
+              if (seen.size >= 8) break;
+            }
+            return [...seen].slice(0, 8);
+          },
+
           // ---- composer: open / close / draft ----
           openComposer(prefill = null) {
             const draft = prefill ? null : LS.json("wa_draft", null);
@@ -1933,9 +2449,11 @@
               errors: {},
               loading: false,
               saveNew: true,
+              saveTemplate: false,
               savedAt: draft?.savedAt || 0,
             });
             this.picker.open = false;
+            this.templateMenuOpen = false;
             this.picker.filter = "all";
             this.emojiOpen = false;
             this.$nextTick(() => {
@@ -1951,6 +2469,7 @@
             this.composer.open = false;
             this.picker.open = false;
             this.emojiOpen = false;
+            this.templateMenuOpen = false;
           },
           queueDraft() {
             if (!this.composer.open || this.composer.loading) return;
@@ -1968,7 +2487,14 @@
             c.savedAt = nowTs();
             LS.set("wa_draft", { recipients: c.recipients, content: c.content, date: c.date, time: c.time, savedAt: c.savedAt });
           },
-          discardDraft() {
+          async discardDraft() {
+            const ok = await this.askConfirm({
+              title: "Discard draft?",
+              body: "The recipients, message and send time in this draft will be cleared.",
+              confirmLabel: "Discard draft",
+              danger: true,
+            });
+            if (!ok) return;
             clearTimeout(draftTimer);
             draftTimer = null;
             LS.remove("wa_draft");
@@ -2064,6 +2590,11 @@
             for (const jid of this.defaultNumbers) {
               if (!this.contacts.some((c) => c.jid === jid)) {
                 out.push({ key: "d:" + jid, jid, title: this.displayRecipient(jid), subtitle: this.subtitleFor(jid), favorite: false, tag: "Default" });
+              }
+            }
+            for (const jid of this.recentRecipients()) {
+              if (!out.some((e) => e.jid === jid)) {
+                out.push({ key: "r:" + jid, jid, title: this.displayRecipient(jid), subtitle: this.subtitleFor(jid), favorite: false, tag: "Recent" });
               }
             }
             return out.sort((a, b) => b.favorite - a.favorite || a.title.localeCompare(b.title));
@@ -2256,9 +2787,14 @@
             try {
               await api.schedule({ recipient_numbers: [...c.recipients], content: c.content, scheduled_sending_at: ts });
               const saved = c.saveNew ? this.saveNewRecipients() : 0;
+              const templateName = c.saveTemplate ? this.saveTemplateFromMessage(c.content) : "";
               LS.remove("wa_draft");
               c.savedAt = 0;
-              toast(`Message scheduled for ${fmtWhen(ts)} (GMT+7).` + (saved ? ` ${plural(saved, "contact", "contacts")} saved.` : ""));
+              toast(
+                `Message scheduled for ${fmtWhen(ts)} (GMT+7).` +
+                  (saved ? ` ${plural(saved, "contact", "contacts")} saved.` : "") +
+                  (templateName ? ` Saved as template “${templateName}”.` : "")
+              );
               c.loading = false;
               this.composer.open = false;
               this.picker.open = false;
