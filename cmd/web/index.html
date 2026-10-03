@@ -3,1163 +3,1568 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WhatsApp Message Scheduler</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Feather Icons -->
+    <title>WA Scheduler</title>
+
+    <!-- ===================================================================
+         LIBRARIES (CDN, pinned)
+         =================================================================== -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.js"></script>
-    <!-- Date and Time picker -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"
     />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
-    <!-- Multi-select input -->
-    <script src="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/scripts/choices.min.js"></script>
+    <!-- Temporary (iteration 1a): replaced by the custom token input in 1b -->
     <link
-      href="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/styles/choices.min.css"
       rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/styles/choices.min.css"
     />
+    <script src="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/scripts/choices.min.js"></script>
+
+    <!-- ===================================================================
+         DESIGN TOKENS (Figma "Design System" page)
+         Breakpoints: Small <=640 (base), Medium 641-1007 (md:), Large >=1008 (lg:)
+         =================================================================== -->
+    <script>
+      tailwind.config = {
+        theme: {
+          screens: { md: "641px", lg: "1008px" },
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              brand: { DEFAULT: "#0f7b6c", hover: "#0b6459", soft: "#e6f4f1" },
+              ink: { DEFAULT: "#111827", secondary: "#4b5563", muted: "#6b7280" },
+              line: { DEFAULT: "#e3e7ec", strong: "#cbd2da" },
+              page: "#f4f6f8",
+              subtle: "#f9fafb",
+              surface: "#ffffff",
+              scrim: "#111827",
+              scheduled: { fg: "#1d4ed8", bg: "#e8f0fe" },
+              sent: { fg: "#15803d", bg: "#e6f6ec" },
+              failed: { fg: "#b42318", bg: "#fdecea" },
+              warning: { fg: "#b45309", bg: "#fef3e2" },
+              chat: { bubble: "#d9fdd3", bg: "#efeae2" },
+            },
+            fontSize: {
+              display: ["26px", "32px"],
+              "modal-title": ["20px", "28px"],
+              "card-title": ["18px", "24px"],
+              body: ["14px", "20px"],
+              small: ["13px", "18px"],
+              label: ["13px", "16px"],
+              caption: ["12px", "16px"],
+              count: ["11px", "14px"],
+              btn: ["14px", "20px"],
+              "btn-lg": ["15px", "20px"],
+            },
+            borderRadius: { 10: "10px" },
+            boxShadow: {
+              modal: "0 16px 48px -8px rgba(0, 0, 0, 0.25)",
+              dropdown: "0 12px 32px -6px rgba(0, 0, 0, 0.18)",
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- ===================================================================
+         COMPONENT STYLES
+         =================================================================== -->
+    <style type="text/tailwindcss">
+      @layer components {
+        /* Buttons: 4 types x states (Design System > Buttons) */
+        .btn {
+          @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-btn font-semibold whitespace-nowrap select-none transition-colors
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2
+            disabled:opacity-40 disabled:pointer-events-none;
+        }
+        .btn-lg { @apply h-11 px-5 rounded-10 text-btn-lg; }
+        .btn-sm { @apply h-8 px-3 text-small; }
+        .btn-primary { @apply bg-brand text-white hover:bg-brand-hover; }
+        .btn-secondary { @apply border border-line-strong bg-surface text-ink-secondary hover:bg-subtle active:bg-page; }
+        .btn-outline { @apply border border-brand bg-surface text-brand hover:bg-brand-soft; }
+        .btn-text { @apply h-auto px-1 text-brand hover:underline; }
+        .btn-icon {
+          @apply inline-flex items-center justify-center size-8 shrink-0 rounded-lg text-ink-secondary transition-colors hover:bg-page hover:text-ink
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2
+            disabled:opacity-40 disabled:pointer-events-none;
+        }
+
+        /* Form controls */
+        .field-label { @apply block mb-1.5 text-label font-medium text-ink; }
+        .field-hint { @apply mt-1.5 text-caption text-ink-muted; }
+        .field-error { @apply mt-1.5 flex items-start gap-1.5 text-caption text-failed-fg; }
+        .input {
+          @apply w-full h-10 px-3 rounded-lg border border-line-strong bg-surface text-body text-ink placeholder:text-ink-muted transition-colors
+            focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/20
+            disabled:opacity-40;
+        }
+        .input-invalid { @apply border-failed-fg focus:border-failed-fg focus:ring-failed-fg/20; }
+
+        /* Surfaces */
+        .card { @apply bg-surface border border-line rounded-xl; }
+        .modal-scrim { @apply fixed inset-0 z-40 flex justify-center overflow-y-auto p-4 bg-scrim/50; }
+        .modal { @apply my-auto flex flex-col w-full bg-surface rounded-2xl shadow-modal; }
+        .modal-header { @apply flex items-center justify-between gap-4 px-6 py-4 border-b border-line; }
+        .modal-footer { @apply flex items-center justify-end gap-3 px-6 py-4 border-t border-line; }
+
+        /* Badges, chips, counts, avatars */
+        .badge { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-semibold whitespace-nowrap; }
+        .badge-dot { @apply size-1.5 rounded-full bg-current; }
+        .badge-scheduled { @apply bg-scheduled-bg text-scheduled-fg; }
+        .badge-sent { @apply bg-sent-bg text-sent-fg; }
+        .badge-failed { @apply bg-failed-bg text-failed-fg; }
+        .count { @apply inline-flex items-center justify-center h-[18px] min-w-[18px] px-[7px] rounded-full bg-line text-count font-semibold text-ink-secondary; }
+        .count-failed { @apply bg-failed-bg text-failed-fg; }
+        .chip { @apply inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-brand-soft text-label font-medium text-brand; }
+        .avatar { @apply inline-flex items-center justify-center shrink-0 rounded-full bg-brand-soft text-brand font-semibold; }
+
+        /* Feedback */
+        .spinner { @apply inline-block size-4 shrink-0 rounded-full border-2 border-current border-r-transparent animate-spin; }
+        .skeleton { @apply rounded bg-line animate-pulse; }
+      }
+    </style>
 
     <style>
-    #toast-container {
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .toast {
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      animation: slideIn 0.3s ease;
-      min-width: 250px;
-    }
-    .toast-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    .toast-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .toast-info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
-    @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-  </style>
+      [x-cloak] { display: none !important; }
+
+      /* flatpickr restyle (tokens) */
+      .flatpickr-calendar { font-family: Inter, system-ui, sans-serif; border-radius: 12px; box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.18); }
+      .flatpickr-wrapper { display: block; width: 100%; }
+      .flatpickr-calendar.static { top: calc(100% + 4px); z-index: 10; }
+      .flatpickr-day.selected, .flatpickr-day.selected:hover { background: #0f7b6c; border-color: #0f7b6c; }
+      .flatpickr-day.today { border-color: #0f7b6c; }
+      .flatpickr-day.today:hover { background: #e6f4f1; color: #0f7b6c; }
+
+      /* choices.js restyle (temporary, iteration 1a) */
+      .choices { margin-bottom: 0; font-size: 14px; }
+      .choices__inner { min-height: 40px; padding: 4px 8px; border: 1px solid #cbd2da; border-radius: 8px; background: #fff; }
+      .is-focused .choices__inner, .is-open .choices__inner { border-color: #0f7b6c; box-shadow: 0 0 0 2px rgba(15, 123, 108, 0.2); }
+      .choices__input { background: transparent; font-size: 14px; margin-bottom: 0; }
+      .choices__list--multiple .choices__item { background: #e6f4f1; border: 0; color: #0f7b6c; border-radius: 999px; font-size: 13px; font-weight: 500; padding: 4px 10px; }
+      .choices[data-type*="select-multiple"] .choices__button { border-left: 1px solid rgba(15, 123, 108, 0.3); filter: invert(33%) sepia(80%) saturate(500%) hue-rotate(130deg); }
+      .choices__list--dropdown, .choices__list[aria-expanded] { border-radius: 12px; border-color: #e3e7ec; box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.18); }
+    </style>
   </head>
 
-  <body class="bg-gray-100 min-h-screen">
-    <!-- Login Modal -->
-    <div
-      id="loginModal"
-      class="hidden fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50"
+  <body
+    class="min-h-screen bg-page font-sans text-ink antialiased"
+    x-data="app"
+    @keydown.window="onKey($event)"
+  >
+    <!-- ===================================================================
+         TEMPLATE: Boot (checking stored login)
+         =================================================================== -->
+    <div x-show="booting" class="flex min-h-screen items-center justify-center text-brand">
+      <span class="spinner size-6" role="status" aria-label="Loading"></span>
+    </div>
+
+    <!-- ===================================================================
+         TEMPLATE: Login (no Figma frame yet: restyled with tokens)
+         =================================================================== -->
+    <main
+      x-show="!booting && !authed"
+      x-cloak
+      class="flex min-h-screen items-center justify-center px-4 py-10"
     >
-      <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
-        <div class="flex justify-between items-center mb-6">
-          <h2 class="text-2xl font-bold text-gray-800">
-            WhatsApp Message Scheduler
-          </h2>
-          <div class="text-green-500">
-            <i data-feather="message-circle"></i>
-          </div>
+      <div class="card w-full max-w-[400px] p-8">
+        <div class="mb-6 flex items-center gap-2.5">
+          <span class="flex size-8 items-center justify-center rounded-lg bg-brand text-white" x-html="icon('send', 16)"></span>
+          <span class="text-base font-semibold">WA Scheduler</span>
         </div>
-        <div
-          id="loginError"
-          class="hidden mb-4 p-3 bg-red-100 text-red-700 rounded-md"
-        >
-          Invalid username or password
-        </div>
-        <form id="loginForm" class="space-y-4">
-          <div>
-            <label
-              for="username"
-              class="block text-sm font-medium text-gray-700 mb-1"
-              >Username</label
-            >
-            <input
-              type="text"
-              id="username"
-              name="username"
-              autocomplete="username"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
-          <div>
-            <label
-              for="password"
-              class="block text-sm font-medium text-gray-700 mb-1"
-              >Password</label
-            >
-            <input
-              type="password"
-              id="password"
-              name="password"
-              autocomplete="current-password"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
-          <button
-            type="submit"
-            class="w-full py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+        <h1 class="text-modal-title font-semibold">Log in</h1>
+        <p class="mt-1 text-small text-ink-muted">Use the dashboard credentials configured on the server.</p>
+
+        <form class="mt-6 space-y-4" @submit.prevent="submitLogin()" novalidate>
+          <div
+            x-show="login.error"
+            class="flex items-start gap-2 rounded-lg bg-failed-bg px-3 py-2.5 text-small text-failed-fg"
+            role="alert"
           >
-            Login
+            <span class="mt-px" x-html="icon('alert-circle', 16)"></span>
+            <span x-text="login.error"></span>
+          </div>
+          <div>
+            <label for="loginUsername" class="field-label">Username</label>
+            <input id="loginUsername" type="text" autocomplete="username" class="input" x-model="login.username" />
+          </div>
+          <div>
+            <label for="loginPassword" class="field-label">Password</label>
+            <input id="loginPassword" type="password" autocomplete="current-password" class="input" x-model="login.password" />
+          </div>
+          <button type="submit" class="btn btn-primary w-full" :disabled="login.loading">
+            <span x-show="login.loading" class="spinner"></span>
+            <span x-text="login.loading ? 'Logging in…' : 'Log in'"></span>
           </button>
         </form>
       </div>
-    </div>
+    </main>
 
-    <!-- Main Dashboard -->
-    <div id="dashboard" class="hidden">
-      <!-- Header -->
-      <header class="bg-white shadow">
-        <div
-          class="container mx-auto px-4 py-4 flex justify-between items-center"
-        >
-          <div class="flex items-center">
-            <h1 class="text-xl font-bold text-gray-800">
-              WhatsApp Message Scheduler
-            </h1>
+    <!-- ===================================================================
+         TEMPLATE: App shell
+         =================================================================== -->
+    <div x-show="!booting && authed" x-cloak class="min-h-screen lg:flex">
+      <!-- Sidebar (Large) -->
+      <aside
+        class="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[240px] lg:shrink-0 lg:flex-col lg:justify-between lg:border-r lg:border-line lg:bg-surface"
+      >
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2.5 p-5">
+            <span class="flex size-8 items-center justify-center rounded-lg bg-brand text-white" x-html="icon('send', 16)"></span>
+            <span class="text-base font-semibold">WA Scheduler</span>
           </div>
-          <button
-            id="logoutBtn"
-            class="flex items-center text-gray-600 hover:text-gray-800"
-          >
-            <span class="mr-2">Logout</span>
-            <i data-feather="log-out" class="h-4 w-4"></i>
-          </button>
+          <nav class="flex flex-col gap-1 px-3" aria-label="Main">
+            <template x-for="item in navItems" :key="item.route">
+              <a
+                :href="'#/' + item.route"
+                class="flex h-10 items-center gap-3 rounded-lg px-3 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                :class="route === item.route ? 'bg-brand-soft font-semibold text-brand' : 'font-medium text-ink-secondary hover:bg-page hover:text-ink'"
+                :aria-current="route === item.route ? 'page' : null"
+              >
+                <span x-html="icon(item.icon, 18)"></span>
+                <span class="flex-1" x-text="item.label"></span>
+                <span class="count h-5" x-show="navCount(item.route) > 0" x-text="navCount(item.route)"></span>
+              </a>
+            </template>
+          </nav>
         </div>
+
+        <div class="flex flex-col gap-3 p-4">
+          <div class="rounded-lg border border-line bg-subtle p-3">
+            <div class="flex items-center gap-2 text-caption font-medium text-ink-secondary">
+              <span x-html="icon('globe', 14)"></span>
+              <span>Time zone</span>
+            </div>
+            <p class="mt-1 text-small font-semibold text-ink" x-text="TZ_LABEL"></p>
+            <p class="mt-0.5 text-caption text-ink-muted" x-text="'Now: ' + fmtDate(now) + ' · ' + fmtTime(now)"></p>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <span class="avatar size-8 text-small" x-text="initialOf(username)"></span>
+              <span class="truncate text-body font-medium" x-text="username"></span>
+            </div>
+            <button type="button" class="btn-icon" @click="logout()" aria-label="Log out" title="Log out">
+              <span x-html="icon('log-out', 16)"></span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Minimal top bar below Large (replaced in Phase 2 / 3) -->
+      <header class="flex items-center justify-between gap-2 border-b border-line bg-surface px-4 py-3 lg:hidden">
+        <div class="flex items-center gap-2">
+          <span class="flex size-8 items-center justify-center rounded-lg bg-brand text-white" x-html="icon('send', 16)"></span>
+          <span class="font-semibold">WA Scheduler</span>
+        </div>
+        <nav class="flex items-center gap-1" aria-label="Main">
+          <template x-for="item in navItems" :key="item.route">
+            <a
+              :href="'#/' + item.route"
+              class="btn-icon size-10"
+              :class="route === item.route ? 'bg-brand-soft text-brand' : ''"
+              :aria-label="item.label"
+              :aria-current="route === item.route ? 'page' : null"
+              x-html="icon(item.icon, 18)"
+            ></a>
+          </template>
+          <button type="button" class="btn-icon size-10" @click="logout()" aria-label="Log out">
+            <span x-html="icon('log-out', 18)"></span>
+          </button>
+        </nav>
       </header>
 
-      <main class="container mx-auto px-4 py-6">
-        <!-- Schedule Message Form -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 class="text-lg font-semibold mb-4">Schedule New Message</h2>
-          <form id="scheduleForm" class="space-y-4">
+      <div class="min-w-0 flex-1">
+        <!-- =============================================================
+             PAGE: Messages (dashboard)
+             ============================================================= -->
+        <section
+          x-show="route === 'messages'"
+          class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8"
+        >
+          <!-- Page header -->
+          <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <label
-                for="recipients"
-                class="block text-sm font-medium text-gray-700 mb-1"
-                >Recipients</label
-              >
-              <select
-                id="recipients"
-                name="recipients"
-                multiple
-              ></select>
-              <p class="mt-1 text-xs text-gray-500">
-                Type phone number, group id or select the recipients
+              <h1 class="text-display font-bold">Messages</h1>
+              <p class="mt-1 text-body text-ink-muted">Everything you have scheduled, sent, or that needs another try.</p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-primary btn-lg"
+              @click="openComposer()"
+              title="New message (N)"
+              aria-keyshortcuts="n"
+            >
+              <span x-html="icon('plus', 18)"></span>
+              New message
+            </button>
+          </div>
+
+          <!-- Session expired banner -->
+          <div
+            x-show="sessionExpiredCount() > 0"
+            class="flex flex-wrap items-start gap-3 rounded-xl border border-warning-fg/30 bg-warning-bg px-4 py-3 text-warning-fg"
+            role="alert"
+          >
+            <span class="mt-0.5" x-html="icon('alert-triangle', 18)"></span>
+            <div class="min-w-0 flex-1">
+              <p class="text-body font-semibold">WhatsApp session expired</p>
+              <p class="mt-0.5 text-small">
+                <span x-text="plural(sessionExpiredCount(), 'message', 'messages')"></span>
+                failed because the publisher's WhatsApp session expired. Re-link WhatsApp on the publisher, then retry them here.
               </p>
             </div>
-            <div>
-              <label
-                for="messageContent"
-                class="block text-sm font-medium text-gray-700 mb-1"
-                >Message Content</label
-              >
-              <textarea
-                id="messageContent"
-                name="messageContent"
-                rows="4"
-                class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-              ></textarea>
-            </div>
-            <div class="flex flex-col">
-              <div>
-                <label
-                  for="scheduledTime"
-                  class="block text-sm font-medium text-gray-700 mb-1"
-                  >Schedule Date & Time (UTC+7 Asia/Jakarta)</label
-                >
-                <input
-                  type="text"
-                  id="scheduledTime"
-                  name="scheduledTime"
-                  class="w-1/4 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+            <button type="button" class="btn btn-sm btn-secondary" @click="setStatus('failed')">Show failed</button>
+          </div>
+
+          <!-- Stats -->
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div class="card flex items-center gap-3.5 px-5 py-[18px]">
+              <span class="flex size-11 shrink-0 items-center justify-center rounded-10 bg-scheduled-bg text-scheduled-fg" x-html="icon('clock', 22)"></span>
+              <div class="min-w-0">
+                <p class="text-small font-medium text-ink-muted">Scheduled</p>
+                <p class="text-display font-bold" x-text="loadedOnce ? counts().scheduled : '–'"></p>
+                <p class="truncate text-caption text-ink-muted" x-text="nextScheduled() ? 'Next: ' + fmtWhenCompact(nextScheduled().scheduled_sending_at) : 'Nothing queued'"></p>
               </div>
             </div>
-            <div class="flex justify-end">
-              <button
-                type="submit"
-                class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              >
-                Schedule Message
+            <div class="card flex items-center gap-3.5 px-5 py-[18px]">
+              <span class="flex size-11 shrink-0 items-center justify-center rounded-10 bg-sent-bg text-sent-fg" x-html="icon('check-circle', 22)"></span>
+              <div class="min-w-0">
+                <p class="text-small font-medium text-ink-muted">Sent</p>
+                <p class="text-display font-bold" x-text="loadedOnce ? counts().sent : '–'"></p>
+                <p class="truncate text-caption text-ink-muted" x-text="lastSentAt() ? 'Last: ' + fmtWhen(lastSentAt()) : 'Nothing sent yet'"></p>
+              </div>
+            </div>
+            <div class="card flex items-center gap-3.5 px-5 py-[18px]">
+              <span class="flex size-11 shrink-0 items-center justify-center rounded-10 bg-failed-bg text-failed-fg" x-html="icon('alert-circle', 22)"></span>
+              <div class="min-w-0">
+                <p class="text-small font-medium text-ink-muted">Failed</p>
+                <p class="text-display font-bold" :class="counts().failed > 0 ? 'text-failed-fg' : ''" x-text="loadedOnce ? counts().failed : '–'"></p>
+                <p
+                  class="truncate text-caption"
+                  :class="counts().failed > 0 ? 'font-semibold text-failed-fg' : 'text-ink-muted'"
+                  x-text="counts().failed > 0 ? 'Review and retry' : 'All good'"
+                ></p>
+              </div>
+            </div>
+            <div class="card flex items-center gap-3.5 px-5 py-[18px]">
+              <span class="flex size-11 shrink-0 items-center justify-center rounded-10 bg-brand-soft text-brand" x-html="icon('send', 22)"></span>
+              <div class="min-w-0">
+                <p class="text-small font-medium text-ink-muted">Next to send</p>
+                <p class="text-display font-bold" x-text="nextScheduled() ? fmtShortIn(nextScheduled().scheduled_sending_at) : '–'"></p>
+                <p
+                  class="truncate text-caption text-ink-muted"
+                  x-text="nextScheduled() ? displayRecipient(nextScheduled().recipient_numbers[0]) + ' · ' + fmtWhenCompact(nextScheduled().scheduled_sending_at) : 'Nothing queued'"
+                ></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages card -->
+          <div class="card overflow-hidden">
+            <!-- Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <div class="flex gap-0.5 rounded-10 bg-page p-[3px]" role="tablist" aria-label="Filter by status">
+                <template x-for="tab in statusTabs" :key="tab.value">
+                  <button
+                    type="button"
+                    role="tab"
+                    class="flex h-8 items-center gap-2 rounded-lg border px-3.5 text-small transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    :class="status === tab.value ? 'border-line bg-surface font-semibold text-ink' : 'border-transparent font-medium text-ink-secondary hover:text-ink'"
+                    :aria-selected="status === tab.value"
+                    @click="setStatus(tab.value)"
+                  >
+                    <span x-text="tab.label"></span>
+                    <span
+                      class="count"
+                      :class="tab.value === 'failed' && counts().failed > 0 ? 'count-failed' : ''"
+                      x-show="loadedOnce"
+                      x-text="tab.value ? counts()[tab.value] : counts().all"
+                    ></span>
+                  </button>
+                </template>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2.5">
+                <label class="relative block w-full md:w-[280px]">
+                  <span class="sr-only">Search messages</span>
+                  <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" x-html="icon('search', 16)"></span>
+                  <input
+                    type="search"
+                    x-ref="search"
+                    class="input h-9 pl-9 text-small"
+                    placeholder="Search message or recipient"
+                    x-model="search"
+                    @input="page = 1"
+                    aria-keyshortcuts="/"
+                  />
+                </label>
+                <button type="button" class="btn btn-secondary h-9 px-3 text-small font-medium" @click="refresh()" :disabled="loading">
+                  <span :class="loading ? 'animate-spin' : ''" x-html="icon('refresh-cw', 16)"></span>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[900px] table-fixed border-t border-line text-left">
+                <thead class="bg-subtle">
+                  <tr class="border-b border-line text-caption font-semibold text-ink-muted">
+                    <th scope="col" class="w-[140px] py-2.5 pl-5 pr-2 font-semibold">Status</th>
+                    <th scope="col" class="px-2 py-2.5 font-semibold">Message</th>
+                    <th scope="col" class="w-[186px] px-2 py-2.5 font-semibold">Recipients</th>
+                    <th scope="col" class="w-[176px] px-2 py-2.5 font-semibold">Send time</th>
+                    <th scope="col" class="w-[170px] py-2.5 pl-2 pr-5 font-semibold"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+
+                <!-- Loading skeleton -->
+                <tbody x-show="loading && list.length === 0">
+                  <template x-for="i in 5" :key="i">
+                    <tr class="border-b border-line">
+                      <td class="py-5 pl-5 pr-2"><div class="skeleton h-6 w-20 rounded-full"></div></td>
+                      <td class="px-2 py-5"><div class="skeleton h-4 w-4/5"></div></td>
+                      <td class="px-2 py-5"><div class="skeleton h-4 w-28"></div></td>
+                      <td class="px-2 py-5"><div class="skeleton mb-1.5 h-3.5 w-24"></div><div class="skeleton h-3 w-16"></div></td>
+                      <td class="py-5 pl-2 pr-5"></td>
+                    </tr>
+                  </template>
+                </tbody>
+
+                <!-- Rows -->
+                <tbody x-show="!(loading && list.length === 0) && !loadError">
+                  <template x-for="m in paged()" :key="m.id">
+                    <tr
+                      class="cursor-pointer border-b border-line transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                      :class="m.status === 'failed' ? 'bg-failed-bg/[0.45] hover:bg-failed-bg/70' : 'hover:bg-subtle'"
+                      tabindex="0"
+                      @click="openDetail(m)"
+                      @keydown.enter.self="openDetail(m)"
+                    >
+                      <td class="py-4 pl-5 pr-2">
+                        <span class="badge" :class="badgeClass(m.status)">
+                          <span class="badge-dot"></span>
+                          <span x-text="statusLabel(m.status)"></span>
+                        </span>
+                      </td>
+                      <td class="px-2 py-4">
+                        <p class="truncate text-body text-ink" x-text="oneLine(m.content)" :title="m.content"></p>
+                        <p x-show="m.status === 'failed'" class="mt-1 truncate text-caption font-semibold text-failed-fg" x-text="failureLine(m)" :title="m.reason || ''"></p>
+                        <p x-show="m.status !== 'failed' && m.retried_count > 0" class="mt-1 text-caption text-ink-muted" x-text="capitalize(retriedLabel(m.retried_count))"></p>
+                      </td>
+                      <td class="px-2 py-4">
+                        <div class="flex min-w-0 items-center gap-2" :title="m.recipient_numbers.map(displayRecipient).join(', ')">
+                          <span class="avatar size-6 text-count">
+                            <span x-show="isGroup(m.recipient_numbers[0])" x-html="icon('users', 12)"></span>
+                            <span x-show="!isGroup(m.recipient_numbers[0])" x-text="initialOf(displayRecipient(m.recipient_numbers[0]))"></span>
+                          </span>
+                          <span class="truncate text-small text-ink-secondary" x-text="displayRecipient(m.recipient_numbers[0])"></span>
+                          <span class="count h-[18px] px-1.5" x-show="m.recipient_numbers.length > 1" x-text="'+' + (m.recipient_numbers.length - 1)"></span>
+                        </div>
+                      </td>
+                      <td class="px-2 py-4">
+                        <p class="text-small font-medium text-ink" x-text="fmtWhen(sendTimeOf(m))" :title="fmtFull(sendTimeOf(m))"></p>
+                        <p class="mt-0.5 text-caption text-ink-muted" x-text="rel(sendTimeOf(m))"></p>
+                      </td>
+                      <td class="py-4 pl-2 pr-5">
+                        <div class="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            x-show="m.status === 'failed'"
+                            class="btn btn-sm btn-outline h-[30px] px-2.5"
+                            @click.stop="openRetry(m)"
+                          >
+                            <span x-html="icon('rotate-ccw', 14)"></span>
+                            Retry
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-icon size-[30px]"
+                            @click.stop="duplicate(m)"
+                            aria-label="Duplicate message"
+                            title="Duplicate"
+                          >
+                            <span x-html="icon('copy', 16)"></span>
+                          </button>
+                          <span class="text-ink-muted" aria-hidden="true" x-html="icon('chevron-right', 18)"></span>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Error state -->
+            <div x-show="loadError && !loading" class="flex flex-col items-center gap-3 px-6 py-14 text-center">
+              <span class="flex size-11 items-center justify-center rounded-full bg-failed-bg text-failed-fg" x-html="icon('alert-circle', 22)"></span>
+              <p class="max-w-md text-body text-ink-secondary">
+                Couldn't load messages: <span x-text="loadError"></span>
+              </p>
+              <button type="button" class="btn btn-secondary" @click="refresh()">
+                <span x-html="icon('refresh-cw', 16)"></span>
+                Try again
               </button>
             </div>
-          </form>
-        </div>
 
-        <!-- Messages List -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-lg font-semibold">Scheduled Messages</h2>
-          <div class="flex justify-between items-center mb-4 w-full">
-            <div class="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
-              <button data-status="" class="status-filter-btn px-3 py-1.5 rounded-md text-xs font-medium transition-all bg-white shadow-sm text-gray-800">All</button>
-              <button data-status="scheduled" class="status-filter-btn px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-500 hover:text-gray-700">Scheduled</button>
-              <button data-status="sent" class="status-filter-btn px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-500 hover:text-gray-700">Sent</button>
-              <button data-status="failed" class="status-filter-btn px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-500 hover:text-gray-700">Failed</button>
+            <!-- Empty state -->
+            <div
+              x-show="!loading && !loadError && loadedOnce && filtered().length === 0"
+              class="flex flex-col items-center gap-3 px-6 py-14 text-center"
+            >
+              <span class="flex size-11 items-center justify-center rounded-full bg-page text-ink-muted" x-html="icon(search ? 'search' : 'inbox', 22)"></span>
+              <p class="text-body text-ink-secondary" x-text="emptyText()"></p>
+              <button type="button" x-show="search" class="btn btn-secondary" @click="search = ''; page = 1">Clear search</button>
+              <button type="button" x-show="!search" class="btn btn-primary" @click="openComposer()">
+                <span x-html="icon('plus', 16)"></span>
+                New message
+              </button>
             </div>
-            <button id="refreshMessages" class="flex items-center text-gray-600 hover:text-gray-800">
-              <i data-feather="refresh-cw" class="h-4 w-4 mr-1"></i>
-              <span>Refresh</span>
-            </button>
-          </div>
 
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th
-                    scope="col"
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Content
-                  </th>
-                  <th
-                    scope="col"
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Recipients
-                  </th>
-                  <th
-                    scope="col"
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Scheduled For
-                  </th>
-                  <th
-                    scope="col"
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Status
-                  </th>
-                  <th
-                    scope="col"
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Retries
-                  </th>
-                  <th
-                    scope="col"
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody
-                id="messagesList"
-                class="bg-white divide-y divide-gray-200"
-              >
-                <!-- Messages will be loaded here -->
-              </tbody>
-            </table>
+            <!-- Pagination -->
+            <div
+              x-show="!loadError && filtered().length > 0"
+              class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
+            >
+              <p class="text-small text-ink-muted" x-text="'Showing ' + rangeFrom() + '–' + rangeTo() + ' of ' + plural(filtered().length, 'message', 'messages')"></p>
+              <div class="flex items-center gap-2.5">
+                <button type="button" class="btn-icon border border-line-strong" :disabled="page <= 1" @click="page--" aria-label="Previous page">
+                  <span x-html="icon('chevron-left', 16)"></span>
+                </button>
+                <span class="text-small text-ink-secondary" x-text="'Page ' + page + ' of ' + pageCount()"></span>
+                <button type="button" class="btn-icon border border-line-strong" :disabled="page >= pageCount()" @click="page++" aria-label="Next page">
+                  <span x-html="icon('chevron-right', 16)"></span>
+                </button>
+              </div>
+            </div>
           </div>
-          <div id="noMessages" class="hidden py-4 text-center text-gray-500">
-            No messages scheduled
-          </div>
-        </div>
-      </main>
-    </div>
+        </section>
 
-    <!-- Message Detail Modal -->
-    <div
-      id="messageDetailModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"
-    >
-      <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-3xl">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-lg font-bold">Message Detail</h2>
-          <button
-            id="closeDetailModal"
-            class="text-gray-500 hover:text-gray-700"
-          >
-            <i data-feather="x"></i>
-          </button>
-        </div>
-        <div id="messageDetail" class="space-y-4">
-          <!-- Message details will be loaded here -->
-        </div>
+        <!-- =============================================================
+             PAGE: Contacts / Templates (placeholders until iteration 1c)
+             ============================================================= -->
+        <template x-for="p in placeholderPages" :key="p.route">
+          <section x-show="route === p.route" class="mx-auto flex max-w-[1360px] flex-col gap-6 px-4 py-6 lg:px-10 lg:py-8">
+            <h1 class="text-display font-bold" x-text="p.label"></h1>
+            <div class="card flex flex-col items-center gap-3 px-6 py-14 text-center">
+              <span class="flex size-11 items-center justify-center rounded-full bg-page text-ink-muted" x-html="icon(p.icon, 22)"></span>
+              <p class="text-body text-ink-secondary" x-text="p.label + ' arrive in the next update.'"></p>
+              <a href="#/messages" class="btn btn-primary">Back to messages</a>
+            </div>
+          </section>
+        </template>
       </div>
     </div>
 
-    <!-- Retry Modal -->
-    <div
-      id="retryModal"
-      class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 hidden"
-    >
-      <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-lg font-bold">Retry Failed Message</h2>
-          <button
-            id="closeRetryModalBtn"
-            class="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded-full hover:bg-gray-100"
-            aria-label="Close"
-          >
-            <i data-feather="x"></i>
+    <!-- ===================================================================
+         TEMPLATE: New message (interim modal, replaced by composer in 1b)
+         =================================================================== -->
+    <div x-show="composer.open" x-cloak class="modal-scrim" @mousedown.self="closeComposer()" x-transition.opacity>
+      <div
+        class="modal max-w-[640px]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="composerTitle"
+        x-trap.noscroll="composer.open"
+      >
+        <div class="modal-header">
+          <h2 id="composerTitle" class="text-modal-title font-semibold">New message</h2>
+          <button type="button" class="btn-icon" @click="closeComposer()" aria-label="Close">
+            <span x-html="icon('x', 20)"></span>
           </button>
         </div>
-
-        <form id="retryForm" class="space-y-4">
-          <input type="hidden" id="retryMessageId" />
-
-          <div class="flex bg-gray-100 p-1 rounded-md mb-2">
-            <button
-              type="button"
-              id="retryImmediateBtn"
-              class="flex-1 py-2 px-3 rounded-md flex items-center justify-center gap-2 transition-all bg-white shadow-sm text-green-600"
-            >
-              <i data-feather="zap" class="w-4 h-4"></i>
-              <span>Immediate</span>
-            </button>
-            <button
-              type="button"
-              id="retryScheduledBtn"
-              class="flex-1 py-2 px-3 rounded-md flex items-center justify-center gap-2 transition-all text-gray-600 hover:bg-gray-200"
-            >
-              <i data-feather="clock" class="w-4 h-4"></i>
-              <span>Scheduled</span>
-            </button>
-          </div>
-
-          <div id="scheduledTimeContainer" class="hidden animate-fadeIn">
-            <label
-              for="retryScheduledTime"
-              class="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Schedule Date & Time (UTC+7 Asia/Jakarta)
-            </label>
-            <input
-              type="text"
-              id="retryScheduledTime"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
-              placeholder="YYYY-MM-DD HH:MM:SS"
-            />
-            <p class="mt-1 text-xs text-gray-500">
-              Format: YYYY-MM-DD HH:MM:SS
+        <form id="composerForm" class="space-y-5 px-6 py-5" @submit.prevent="submitComposer()" novalidate>
+          <div>
+            <label for="composerRecipients" class="field-label">Recipients</label>
+            <div x-ignore><select id="composerRecipients" multiple></select></div>
+            <p class="field-error" x-show="composer.errors.recipients">
+              <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.recipients"></span>
+            </p>
+            <p class="field-hint" x-show="!composer.errors.recipients">
+              Type a number with country code (e.g. +62 812 3456 7890) or a group ID, then press Enter.
             </p>
           </div>
-
-          <div class="flex justify-end pt-2">
-            <button
-              type="button"
-              id="cancelRetryBtn"
-              class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md mr-2 hover:bg-gray-100 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              id="submitBtn"
-              class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              <i data-feather="zap" class="w-4 h-4"></i>
-              <span>Retry Now</span>
-            </button>
+          <div>
+            <label for="composerContent" class="field-label">Message</label>
+            <textarea
+              id="composerContent"
+              rows="7"
+              class="input h-auto min-h-[190px] py-2.5"
+              :class="composer.errors.content ? 'input-invalid' : ''"
+              x-model="composer.content"
+            ></textarea>
+            <div class="flex items-start justify-between gap-3">
+              <p class="field-error" x-show="composer.errors.content">
+                <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.content"></span>
+              </p>
+              <span class="field-hint ml-auto" x-text="plural(composer.content.length, 'character', 'characters')"></span>
+            </div>
+          </div>
+          <div>
+            <label for="composerTime" class="field-label" x-text="'Send time (' + TZ_LABEL + ')'"></label>
+            <div class="relative">
+              <input
+                id="composerTime"
+                type="text"
+                class="input"
+                :class="composer.errors.time ? 'input-invalid' : ''"
+                placeholder="Pick date and time"
+                readonly
+              />
+            </div>
+            <p class="field-error" x-show="composer.errors.time">
+              <span x-html="icon('alert-circle', 14)"></span><span x-text="composer.errors.time"></span>
+            </p>
+            <p class="field-hint" x-show="!composer.errors.time && composerTs()" x-text="sendSummary(composerTs())"></p>
           </div>
         </form>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="closeComposer()">Cancel</button>
+          <button type="submit" form="composerForm" class="btn btn-primary min-w-[172px]" :disabled="composer.loading">
+            <span x-show="composer.loading" class="spinner"></span>
+            <span x-show="!composer.loading" x-html="icon('send', 16)"></span>
+            <span x-text="composer.loading ? 'Scheduling…' : 'Schedule message'"></span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <div id="toast-container"></div>
+    <!-- ===================================================================
+         TEMPLATE: Message detail (no Figma frame yet: restyled with tokens)
+         =================================================================== -->
+    <div x-show="detail" x-cloak class="modal-scrim" @mousedown.self="closeDetail()" x-transition.opacity>
+      <div
+        class="modal max-w-[640px]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="detailTitle"
+        x-trap.noscroll="!!detail"
+      >
+        <template x-if="detail">
+          <div class="flex flex-col">
+            <div class="modal-header">
+              <div class="flex items-center gap-3">
+                <h2 id="detailTitle" class="text-modal-title font-semibold">Message detail</h2>
+                <span class="badge" :class="badgeClass(detail.status)">
+                  <span class="badge-dot"></span><span x-text="statusLabel(detail.status)"></span>
+                </span>
+              </div>
+              <button type="button" class="btn-icon" @click="closeDetail()" aria-label="Close">
+                <span x-html="icon('x', 20)"></span>
+              </button>
+            </div>
+
+            <div class="space-y-5 px-6 py-5">
+              <div
+                x-show="detail.status === 'failed'"
+                class="flex items-start gap-2 rounded-lg bg-failed-bg px-3 py-2.5 text-small text-failed-fg"
+              >
+                <span class="mt-px" x-html="icon('alert-circle', 16)"></span>
+                <div class="min-w-0">
+                  <p class="font-semibold" x-text="failureLine(detail)"></p>
+                  <p class="mt-0.5 break-words" x-show="detail.reason && detail.reason !== failureLabel(detail.reason)" x-text="detail.reason"></p>
+                </div>
+              </div>
+
+              <div>
+                <p class="field-label">Message</p>
+                <div class="whitespace-pre-wrap break-words rounded-lg border border-line bg-subtle p-3 text-body" x-text="detail.content"></div>
+              </div>
+
+              <div>
+                <p class="field-label" x-text="'Recipients (' + detail.recipient_numbers.length + ')'"></p>
+                <div class="flex flex-wrap gap-1.5">
+                  <template x-for="r in detail.recipient_numbers" :key="r">
+                    <span class="chip" :title="r">
+                      <span x-html="icon(isGroup(r) ? 'users' : 'user', 14)"></span>
+                      <span x-text="displayRecipient(r)"></span>
+                    </span>
+                  </template>
+                </div>
+              </div>
+
+              <dl class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                <div>
+                  <dt class="text-caption text-ink-muted">Scheduled for</dt>
+                  <dd class="mt-0.5 text-body font-medium" x-text="fmtFull(detail.scheduled_sending_at)"></dd>
+                  <dd class="text-caption text-ink-muted" x-text="rel(detail.scheduled_sending_at) + ' · ' + fmtUtc(detail.scheduled_sending_at)"></dd>
+                </div>
+                <div>
+                  <dt class="text-caption text-ink-muted">Sent at</dt>
+                  <dd class="mt-0.5 text-body font-medium" x-text="detail.sent_at ? fmtFull(detail.sent_at) : 'Not sent yet'"></dd>
+                </div>
+                <div>
+                  <dt class="text-caption text-ink-muted">Retries</dt>
+                  <dd class="mt-0.5 text-body font-medium" x-text="detail.retried_count"></dd>
+                </div>
+                <div>
+                  <dt class="text-caption text-ink-muted">Created / updated</dt>
+                  <dd class="mt-0.5 text-body" x-text="fmtFull(detail.created_at)"></dd>
+                  <dd class="text-caption text-ink-muted" x-text="'Updated ' + fmtFull(detail.updated_at)"></dd>
+                </div>
+                <div class="md:col-span-2">
+                  <dt class="text-caption text-ink-muted">Message ID</dt>
+                  <dd class="mt-0.5 flex items-center gap-2">
+                    <code class="truncate text-small text-ink-secondary" x-text="detail.id"></code>
+                    <button type="button" class="btn-icon size-7" @click="copyText(detail.id, 'Message ID copied')" aria-label="Copy message ID">
+                      <span x-html="icon('clipboard', 14)"></span>
+                    </button>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary mr-auto" @click="duplicate(detail)">
+                <span x-html="icon('copy', 16)"></span>
+                Duplicate
+              </button>
+              <button type="button" class="btn btn-secondary" @click="closeDetail()">Close</button>
+              <button type="button" x-show="detail.status === 'failed'" class="btn btn-outline" @click="openRetry(detail)">
+                <span x-html="icon('rotate-ccw', 16)"></span>
+                Retry
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         TEMPLATE: Retry (no Figma frame yet: restyled with tokens)
+         =================================================================== -->
+    <div x-show="retry.open" x-cloak class="modal-scrim z-50" @mousedown.self="closeRetry()" x-transition.opacity>
+      <div
+        class="modal max-w-[480px]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="retryTitle"
+        x-trap.noscroll="retry.open"
+      >
+        <div class="modal-header">
+          <h2 id="retryTitle" class="text-modal-title font-semibold">Retry failed message</h2>
+          <button type="button" class="btn-icon" @click="closeRetry()" aria-label="Close">
+            <span x-html="icon('x', 20)"></span>
+          </button>
+        </div>
+        <form id="retryForm" class="space-y-4 px-6 py-5" @submit.prevent="submitRetry()" novalidate>
+          <div class="rounded-lg border border-line bg-subtle p-3">
+            <p class="truncate text-body" x-text="oneLine(retry.content)"></p>
+            <p class="mt-1 truncate text-caption font-semibold text-failed-fg" x-text="retry.failure"></p>
+          </div>
+
+          <fieldset>
+            <legend class="field-label">When should it be sent?</legend>
+            <div class="grid grid-cols-2 gap-3">
+              <template x-for="opt in retryOptions" :key="opt.value">
+                <label
+                  class="flex cursor-pointer flex-col gap-1 rounded-xl border p-3 transition-colors focus-within:ring-2 focus-within:ring-brand focus-within:ring-offset-2"
+                  :class="retry.mode === opt.value ? 'border-brand bg-brand-soft' : 'border-line-strong hover:bg-subtle'"
+                >
+                  <input type="radio" name="retryMode" class="sr-only" :value="opt.value" x-model="retry.mode" />
+                  <span class="flex items-center gap-2 text-body font-semibold" :class="retry.mode === opt.value ? 'text-brand' : 'text-ink'">
+                    <span x-html="icon(opt.icon, 16)"></span>
+                    <span x-text="opt.label"></span>
+                  </span>
+                  <span class="text-caption text-ink-muted" x-text="opt.hint"></span>
+                </label>
+              </template>
+            </div>
+          </fieldset>
+
+          <div x-show="retry.mode === 'later'">
+            <label for="retryTime" class="field-label" x-text="'Send time (' + TZ_LABEL + ')'"></label>
+            <div class="relative">
+              <input
+                id="retryTime"
+                type="text"
+                class="input"
+                :class="retry.error ? 'input-invalid' : ''"
+                placeholder="Pick date and time"
+                readonly
+              />
+            </div>
+            <p class="field-hint" x-show="!retry.error && retryTs()" x-text="sendSummary(retryTs())"></p>
+          </div>
+
+          <p class="field-error" x-show="retry.error">
+            <span x-html="icon('alert-circle', 14)"></span><span x-text="retry.error"></span>
+          </p>
+        </form>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="closeRetry()">Cancel</button>
+          <button type="submit" form="retryForm" class="btn btn-primary min-w-[150px]" :disabled="retry.loading">
+            <span x-show="retry.loading" class="spinner"></span>
+            <span x-show="!retry.loading" x-html="icon(retry.mode === 'later' ? 'clock' : 'zap', 16)"></span>
+            <span x-text="retry.loading ? 'Retrying…' : (retry.mode === 'later' ? 'Schedule retry' : 'Retry now')"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         TEMPLATE: Toasts (top on Small, bottom-left on Large)
+         =================================================================== -->
+    <div
+      class="pointer-events-none fixed inset-x-4 top-4 z-[60] flex flex-col items-center gap-2 lg:inset-x-auto lg:bottom-6 lg:left-6 lg:top-auto lg:items-start"
+      aria-live="polite"
+      role="status"
+    >
+      <template x-for="t in $store.toasts.items" :key="t.id">
+        <div
+          class="pointer-events-auto flex w-full max-w-[400px] items-start gap-2.5 rounded-xl border px-4 py-3 text-small font-medium shadow-dropdown"
+          :class="{
+            'border-sent-fg/20 bg-sent-bg text-sent-fg': t.type === 'success',
+            'border-failed-fg/20 bg-failed-bg text-failed-fg': t.type === 'error',
+            'border-scheduled-fg/20 bg-scheduled-bg text-scheduled-fg': t.type === 'info',
+          }"
+          x-transition.opacity
+        >
+          <span class="mt-px" x-html="icon(t.type === 'success' ? 'check-circle' : t.type === 'error' ? 'alert-circle' : 'info', 16)"></span>
+          <span class="flex-1 break-words" x-text="t.message"></span>
+          <button type="button" class="-mr-1 opacity-70 hover:opacity-100" @click="$store.toasts.dismiss(t.id)" aria-label="Dismiss">
+            <span x-html="icon('x', 14)"></span>
+          </button>
+        </div>
+      </template>
+    </div>
 
     <script>
-      const IMMEDIATE_RETRY_TYPE = "immmediate";
-      const SCHEDULED_RETRY_TYPE = "scheduled";
-
-      // Initialize icons
-      document.addEventListener("DOMContentLoaded", () => {
-        feather.replace();
-      });
-
-      // Format WhatsApp phone number
-      function formatWhatsappNumber(phoneNumber) {
-        // If the number already contains @, it's already formatted
-        if (phoneNumber.includes("@")) {
-          return phoneNumber;
-        }
-        // Otherwise append @s.whatsapp.net for individual contacts
-        return `${phoneNumber}@s.whatsapp.net`;
-      }
-
-      // Mock Functions - Replace with actual API calls
-      const auth = {
-        token: localStorage.getItem("web_client_token"),
-        defaultNumbers: localStorage.getItem("web_client_default_numbers")
-          ? JSON.parse(localStorage.getItem("web_client_default_numbers"))
-          : null,
+      /* =====================================================================
+         UTIL
+         ===================================================================== */
+      const LS = {
+        raw(key) {
+          try { return localStorage.getItem(key) || ""; } catch { return ""; }
+        },
+        json(key, fallback) {
+          try {
+            const v = localStorage.getItem(key);
+            return v ? JSON.parse(v) : fallback;
+          } catch { return fallback; }
+        },
+        set(key, value) {
+          try {
+            localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
+          } catch {}
+        },
       };
 
-      let choices;
-      let retryType = IMMEDIATE_RETRY_TYPE;
-
-      // Base64 encode for basic auth
-      function encodeCredentials(username, password) {
-        return btoa(`${username}:${password}`);
+      // For the few places that must build HTML strings. Templates use x-text,
+      // which never interprets markup.
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
       }
 
-      // Format date from timestamp
-      function formatDate(timestamp) {
-        const date = new Date(timestamp * 1000);
-        return date.toLocaleString("en-ID", { timeZone: "Asia/Jakarta" });
+      function icon(name, size = 16) {
+        const i = window.feather && feather.icons[name];
+        return i ? i.toSvg({ width: size, height: size, "aria-hidden": "true", focusable: "false" }) : "";
       }
 
-      // Initialize date picker
-      function initDatePicker(elementId) {
-        flatpickr(`#${elementId}`, {
+      const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+      const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+      const oneLine = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+      const initialOf = (s) => (String(s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").charAt(0) || "?").toUpperCase();
+
+      function utf8ToBase64(s) {
+        return btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+      }
+      function usernameFromToken(token) {
+        try {
+          const bytes = Uint8Array.from(atob(token), (c) => c.charCodeAt(0));
+          return new TextDecoder().decode(bytes).split(":")[0];
+        } catch { return ""; }
+      }
+
+      /* =====================================================================
+         TIME — always Asia/Jakarta (GMT+7, no DST), whatever the browser zone
+         ===================================================================== */
+      const TZ_OFFSET = 7 * 3600;
+      const TZ_LABEL = "GMT+7 · Asia/Jakarta";
+      const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const pad = (n) => String(n).padStart(2, "0");
+      const nowTs = () => Math.floor(Date.now() / 1000);
+
+      // Wall-clock parts in Jakarta for a unix timestamp (seconds).
+      function jkt(ts) {
+        const d = new Date((ts + TZ_OFFSET) * 1000);
+        return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes(), wd: d.getUTCDay() };
+      }
+      const dayIndex = (ts) => Math.floor((ts + TZ_OFFSET) / 86400);
+
+      function fmtTime(ts) {
+        const p = jkt(ts);
+        return `${pad(p.h)}:${pad(p.mi)}`;
+      }
+      function fmtDate(ts, withYear = false) {
+        const p = jkt(ts);
+        const year = withYear || p.y !== jkt(nowTs()).y ? ` ${p.y}` : "";
+        return `${DAYS[p.wd]}, ${p.d} ${MONTHS[p.m]}${year}`;
+      }
+      // "Today, 20:30" / "Tomorrow, 09:00" / "Sat, 3 Oct · 09:00"
+      function fmtWhen(ts) {
+        const diff = dayIndex(ts) - dayIndex(nowTs());
+        if (diff === 0) return `Today, ${fmtTime(ts)}`;
+        if (diff === 1) return `Tomorrow, ${fmtTime(ts)}`;
+        if (diff === -1) return `Yesterday, ${fmtTime(ts)}`;
+        return `${fmtDate(ts)} · ${fmtTime(ts)}`;
+      }
+      // "Sat, 09:00" within a week, otherwise like fmtWhen
+      function fmtWhenCompact(ts) {
+        const diff = dayIndex(ts) - dayIndex(nowTs());
+        if (diff >= 2 && diff < 7) return `${DAYS[jkt(ts).wd]}, ${fmtTime(ts)}`;
+        return fmtWhen(ts);
+      }
+      const fmtFull = (ts) => `${fmtDate(ts, true)} · ${fmtTime(ts)} (GMT+7)`;
+      function fmtUtc(ts) {
+        const d = new Date(ts * 1000);
+        return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+      }
+      const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+      function fmtRelative(ts, now = nowTs()) {
+        const s = ts - now;
+        const a = Math.abs(s);
+        if (a < 60) return s >= 0 ? "in a moment" : "just now";
+        if (a < 3600) return rtf.format(Math.round(s / 60), "minute");
+        if (a < 86400) return rtf.format(Math.round(s / 3600), "hour");
+        return rtf.format(dayIndex(ts) - dayIndex(now), "day");
+      }
+      function fmtShortIn(ts, now = nowTs()) {
+        const s = ts - now;
+        if (s <= 60) return "now";
+        if (s < 3600) return `in ${Math.round(s / 60)} min`;
+        if (s < 86400) return `in ${Math.round(s / 3600)} h`;
+        return `in ${Math.round(s / 86400)} d`;
+      }
+      // "YYYY-MM-DD HH:MM" typed/picked as Jakarta wall time -> unix seconds
+      function parseJakartaInput(str) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/.exec(String(str || "").trim());
+        if (!m) return NaN;
+        return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) / 1000 - TZ_OFFSET;
+      }
+      function toJakartaInput(ts) {
+        const p = jkt(ts);
+        return `${p.y}-${pad(p.m + 1)}-${pad(p.d)} ${pad(p.h)}:${pad(p.mi)}`;
+      }
+
+      // flatpickr only ever sees Jakarta wall-clock strings, so the browser
+      // zone never leaks into the timestamp.
+      function initDatePicker(el, onChange) {
+        return flatpickr(el, {
           enableTime: true,
+          time_24hr: true,
           minuteIncrement: 1,
           dateFormat: "Y-m-d H:i",
-          time_24hr: true,
-          minDate: "today",
-          defaultHour: new Date().getHours(),
-          defaultMinute: new Date().getMinutes(),
-          onOpen: function (selectedDates, dateStr, instance) {
-            const now = new Date();
-
-            instance.setDate(now, true);
+          static: true,
+          minDate: toJakartaInput(nowTs()).slice(0, 10),
+          onOpen(_, __, fp) {
+            fp.set("minDate", toJakartaInput(nowTs()).slice(0, 10));
+            if (!fp.input.value) fp.setDate(toJakartaInput(nowTs() + 5 * 60), true);
           },
-        });
-
-        document.getElementById(elementId).value = "";
-      }
-
-      // Truncate text
-      function truncateText(text, maxLength = 50) {
-        if (text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + "...";
-      }
-
-      // API Calls
-      async function checkAuth(username, password) {
-        try {
-          const response = await fetch("/check", {
-            method: "GET",
-            headers: {
-              Authorization: `Basic ${encodeCredentials(username, password)}`,
-              "Content-Type": "application/json",
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error("Authentication failed");
-          }
-
-          const data = await response.json();
-          if (data.ok) {
-            auth.token = encodeCredentials(username, password);
-            auth.defaultNumbers = data.data.default_numbers || [];
-            localStorage.setItem("web_client_token", auth.token);
-            localStorage.setItem(
-              "web_client_default_numbers",
-              JSON.stringify(auth.defaultNumbers)
-            );
-
-            return true;
-          }
-          return false;
-        } catch (error) {
-          console.error("Auth check error:", error);
-          return false;
-        }
-      }
-
-      async function checkCurrentAuth() {
-        try {
-          const response = await fetch("/check", {
-            method: "GET",
-            headers: {
-              Authorization: `Basic ${auth.token}`,
-              "Content-Type": "application/json",
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error("Authentication failed");
-          }
-
-          const data = await response.json();
-          if (data.ok) {
-            auth.defaultNumbers = data.data.default_numbers || [];
-            localStorage.setItem(
-              "web_client_default_numbers",
-              JSON.stringify(auth.defaultNumbers)
-            );
-
-            return true;
-          }
-          return false;
-        } catch (error) {
-          console.error("Auth check error:", error);
-          return false;
-        }
-      }
-
-      async function getAllMessages(status = "") {
-        try {
-          const url = status ? `/messages?status=${status}` : "/messages";
-          const response = await fetch(url, {
-            method: "GET",
-            headers: {
-              Authorization: `Basic ${auth.token}`,
-              "Content-Type": "application/json",
-            },
-          });
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              auth.token = null;
-              showLoginModal();
-              return [];
-            }
-            throw new Error("Failed to fetch messages");
-          }
-
-          const data = await response.json();
-          return data.data || [];
-        } catch (error) {
-          console.error("Get messages error:", error);
-          return [];
-        }
-      }
-
-      async function scheduleMessage(
-        recipientNumbers,
-        content,
-        scheduledSendingAt
-      ) {
-        try {
-          const response = await fetch("/messages", {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${auth.token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              recipient_numbers: recipientNumbers,
-              content: content,
-              scheduled_sending_at: scheduledSendingAt,
-            }),
-          });
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              showLoginModal();
-              return false;
-            }
-            throw new Error("Failed to schedule message");
-          }
-
-          const data = await response.json();
-          return data.ok;
-        } catch (error) {
-          console.error("Schedule message error:", error);
-          return false;
-        }
-      }
-
-      async function retryMessage(messageId, scheduledSendingAt = null) {
-        try {
-          const body = scheduledSendingAt
-            ? { scheduled_sending_at: scheduledSendingAt }
-            : {};
-          const response = await fetch(`/messages/${messageId}/retry`, {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${auth.token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          });
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              showLoginModal();
-              return false;
-            }
-            throw new Error("Failed to retry message");
-          }
-
-          const data = await response.json();
-          return data.ok;
-        } catch (error) {
-          console.error("Retry message error:", error);
-          return false;
-        }
-      }
-
-      function showToast(message, type = "success") {
-        const container = document.getElementById("toast-container");
-        const toast = document.createElement("div");
-        toast.className = `toast toast-${type}`;
-
-        const icon = type === "success" ? "check-circle" : type === "error" ? "alert-circle" : "info";
-        toast.innerHTML = `<i data-feather="${icon}" class="w-4 h-4 flex-shrink-0"></i> ${message}`;
-        container.appendChild(toast);
-        feather.replace();
-
-        setTimeout(() => {
-          toast.style.transition = "opacity 0.3s ease";
-          toast.style.opacity = "0";
-          setTimeout(() => toast.remove(), 300);
-        }, 3000);
-      }
-
-      // UI Functions
-      function initPage() {
-        if (!auth.token) {
-          showLoginModal();
-        } else {
-          checkCurrentAuth().then((isAuthenticated) => {
-            if (isAuthenticated) {
-              showDashboard();
-            } else {
-              localStorage.setItem("web_client_token", "");
-              localStorage.setItem("web_client_default_numbers", []);
-              auth.token = null;
-              auth.defaultNumbers = [];
-              showLoginModal();
-            }
-          });
-        }
-      }
-
-      function showLoginModal() {
-        document.getElementById("loginModal").classList.add("flex");
-        document.getElementById("loginModal").classList.remove("hidden");
-      }
-
-      function hideLoginModal() {
-        document.getElementById("loginModal").classList.add("hidden");
-        document.getElementById("loginModal").classList.remove("flex");
-      }
-
-      function showDashboard() {
-        document.getElementById("dashboard").classList.remove("hidden");
-
-        initRecipientsSelect();
-
-        loadMessages();
-      }
-
-      function hideDashboard() {
-        document.getElementById("dashboard").classList.add("hidden");
-      }
-
-      function showMessageDetailModal(message) {
-        const modal = document.getElementById("messageDetailModal");
-        const detailContainer = document.getElementById("messageDetail");
-
-        // Format the message details
-        let statusClass = "";
-        switch (message.status) {
-          case "sent":
-            statusClass = "bg-green-100 text-green-800";
-            break;
-          case "scheduled":
-            statusClass = "bg-blue-100 text-blue-800";
-            break;
-          case "failed":
-            statusClass = "bg-red-100 text-red-800";
-            break;
-        }
-
-        detailContainer.innerHTML = `
-                <div>
-                    <span class="font-semibold">ID:</span> ${message.id}
-                </div>
-                <div>
-                    <span class="font-semibold">Content:</span>
-                    <div class="mt-1 p-3 bg-gray-50 rounded">${
-                      message.content
-                    }</div>
-                </div>
-                <div>
-                    <span class="font-semibold">Recipients:</span>
-                    <div class="mt-1 flex flex-wrap gap-1">
-                        ${message.recipient_numbers
-                          .map(
-                            (number) =>
-                              `<span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">${number}</span>`
-                          )
-                          .join("")}
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <span class="font-semibold">Scheduled At:</span>
-                        <div class="mt-1">${formatDate(
-                          message.scheduled_sending_at
-                        )}</div>
-                    </div>
-                    <div>
-                        <span class="font-semibold">Sent At:</span>
-                        <div class="mt-1">${
-                          message.sent_at
-                            ? formatDate(message.sent_at)
-                            : "Not sent yet"
-                        }</div>
-                    </div>
-                    <div>
-                        <span class="font-semibold">Status:</span>
-                        <div class="mt-1"><span class="px-2 py-1 rounded ${statusClass}">${
-          message.status
-        }</span></div>
-                    </div>
-                    <div>
-                        <span class="font-semibold">Retry Count:</span>
-                        <div class="mt-1">${message.retried_count}</div>
-                    </div>
-                </div>
-                ${
-                  message.reason
-                    ? `
-                <div>
-                    <span class="font-semibold">Failure Reason:</span>
-                    <div class="mt-1 text-red-600">${message.reason}</div>
-                </div>
-                `
-                    : ""
-                }
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <span class="font-semibold">Created At:</span>
-                        <div class="mt-1">${formatDate(
-                          message.created_at
-                        )}</div>
-                    </div>
-                    <div>
-                        <span class="font-semibold">Updated At:</span>
-                        <div class="mt-1">${formatDate(
-                          message.updated_at
-                        )}</div>
-                    </div>
-                </div>
-                ${
-                  message.status === "failed"
-                    ? `
-                <div class="mt-4">
-                    <button id="retryFromDetail" data-message-id="${message.id}" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
-                        Retry Message
-                    </button>
-                </div>
-                `
-                    : ""
-                }
-            `;
-
-        modal.classList.remove("hidden");
-
-        // Add event listener for retry button
-        const retryBtn = document.getElementById("retryFromDetail");
-        if (retryBtn) {
-          retryBtn.addEventListener("click", () => {
-            modal.classList.add("hidden");
-            showRetryModal(message.id);
-          });
-        }
-      }
-      // Status filter pills
-      document.querySelectorAll(".status-filter-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          currentStatus = btn.getAttribute("data-status");
-          document.querySelectorAll(".status-filter-btn").forEach((b) => {
-            b.classList.remove("bg-white", "shadow-sm", "text-gray-800");
-            b.classList.add("text-gray-500");
-          });
-          btn.classList.add("bg-white", "shadow-sm", "text-gray-800");
-          btn.classList.remove("text-gray-500");
-          loadMessages();
-        });
-      });
-
-      function showRetryModal(messageId) {
-        document.getElementById("retryMessageId").value = messageId;
-        document.getElementById("retryModal").classList.remove("hidden");
-        document.getElementById("retryModal").classList.add("flex");
-      }
-
-      function hideRetryModal() {
-        document.getElementById("retryModal").classList.add("hidden");
-        document.getElementById("retryModal").classList.remove("flex");
-        document.getElementById("retryScheduledTime").value = "";
-
-        updateRetryType(IMMEDIATE_RETRY_TYPE);
-      }
-
-      function renderMessagesList(messages) {
-        const messagesList = document.getElementById("messagesList");
-        const noMessages = document.getElementById("noMessages");
-
-        if (!messages || messages.length === 0) {
-          messagesList.innerHTML = "";
-          noMessages.classList.remove("hidden");
-          return;
-        }
-
-        noMessages.classList.add("hidden");
-
-        messagesList.innerHTML = messages
-          .map((message) => {
-            // Determine status badge class
-            let statusBadgeClass = "";
-            switch (message.status) {
-              case "sent":
-                statusBadgeClass = "bg-green-100 text-green-800";
-                break;
-              case "scheduled":
-                statusBadgeClass = "bg-blue-100 text-blue-800";
-                break;
-              case "failed":
-                statusBadgeClass = "bg-red-100 text-red-800";
-                break;
-            }
-
-            return `
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm text-gray-900">${truncateText(
-                          message.content
-                        )}</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm text-gray-900">
-                          ${message.recipient_numbers.length} recipient
-                          ${message.recipient_numbers.length > 1 ? "s" : ""}
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm text-gray-900">${formatDate(
-                          message.scheduled_sending_at
-                        )}</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
-                            ${message.status}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm text-gray-900">${
-                          message.retried_count
-                        }</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          class="view-details text-blue-600 hover:text-blue-900 mr-3"
-                          data-id="${message.id}"
-                        >
-                          View
-                        </button>
-                        ${
-                          message.status === "failed"
-                            ? `<button class="retry-message text-green-600 hover:text-green-900" data-id="${message.id}">
-                                Retry
-                              </button>`
-                            : ""
-                        }
-                    </td>
-                </tr>
-                `;
-          })
-          .join("");
-
-        // Add event listeners to buttons
-        document.querySelectorAll(".view-details").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const messageId = btn.getAttribute("data-id");
-            const message = messages.find((m) => m.id === messageId);
-            if (message) {
-              showMessageDetailModal(message);
-            }
-          });
-        });
-
-        document.querySelectorAll(".retry-message").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const messageId = btn.getAttribute("data-id");
-            showRetryModal(messageId);
-          });
+          onChange(_, dateStr) { onChange(dateStr); },
         });
       }
 
-      let currentStatus = "";
-      async function loadMessages() {
-        const messages = await getAllMessages(currentStatus);
-        renderMessagesList(messages);
+      /* =====================================================================
+         RECIPIENTS
+         ===================================================================== */
+      const isGroup = (jid) => String(jid || "").endsWith("@g.us");
+
+      // "+62 812-3456 7890" / "0812..." / "62812..." -> "62812...@s.whatsapp.net"
+      function normalizeRecipient(raw) {
+        const s = String(raw || "").trim();
+        if (!s) return { ok: false, error: "Enter a phone number or group ID." };
+        if (s.includes("@")) {
+          if (/^\d{5,}@s\.whatsapp\.net$/.test(s) || /^[\d-]{5,}@g\.us$/.test(s)) return { ok: true, jid: s };
+          return { ok: false, error: `"${s}" is not a valid WhatsApp ID. Use a number like +62 812 3456 7890 or a group ID ending in @g.us.` };
+        }
+        let d = s.replace(/[\s\-().]/g, "");
+        if (d.startsWith("+")) d = d.slice(1);
+        if (!/^\d+$/.test(d)) return { ok: false, error: `"${s}" contains letters or symbols. Use digits only, e.g. +62 812 3456 7890.` };
+        if (d.startsWith("0")) d = "62" + d.slice(1);
+        if (d.length < 8 || d.length > 15) {
+          return { ok: false, error: `"${s}" has ${d.length} digits. Phone numbers need 8–15 digits including the country code.` };
+        }
+        return { ok: true, jid: `${d}@s.whatsapp.net` };
       }
 
-      const updateRetryType = (type) => {
-        retryType = type;
-        const retryImmediateBtn = document.getElementById("retryImmediateBtn");
-        const retryScheduledBtn = document.getElementById("retryScheduledBtn");
-        const scheduledTimeContainer = document.getElementById(
-          "scheduledTimeContainer"
-        );
-
-        if (type === IMMEDIATE_RETRY_TYPE) {
-          retryImmediateBtn.classList.add(
-            "bg-white",
-            "shadow-sm",
-            "text-green-600"
-          );
-          retryImmediateBtn.classList.remove(
-            "text-gray-600",
-            "hover:bg-gray-200"
-          );
-          retryScheduledBtn.classList.remove(
-            "bg-white",
-            "shadow-sm",
-            "text-green-600"
-          );
-          retryScheduledBtn.classList.add("text-gray-600", "hover:bg-gray-200");
-          scheduledTimeContainer.classList.add("hidden");
-          submitBtn.innerHTML = `
-            <i data-feather="zap" class="w-4 h-4"></i>
-            <span>Retry Now</span>
-          `;
+      function formatPhone(digits) {
+        if (digits.startsWith("62")) {
+          const r = digits.slice(2);
+          return "+62 " + [r.slice(0, 3), r.slice(3, 7), r.slice(7)].filter(Boolean).join(" ");
         }
+        return "+" + digits;
+      }
 
-        if (type === SCHEDULED_RETRY_TYPE) {
-          retryScheduledBtn.classList.add(
-            "bg-white",
-            "shadow-sm",
-            "text-green-600"
-          );
-          retryScheduledBtn.classList.remove(
-            "text-gray-600",
-            "hover:bg-gray-200"
-          );
-          retryImmediateBtn.classList.remove(
-            "bg-white",
-            "shadow-sm",
-            "text-green-600"
-          );
-          retryImmediateBtn.classList.add("text-gray-600", "hover:bg-gray-200");
-          scheduledTimeContainer.classList.remove("hidden");
-          submitBtn.innerHTML = `
-            <i data-feather="clock" class="w-4 h-4"></i>
-            <span>Schedule Retry</span>
-          `;
+      /* =====================================================================
+         FAILURE REASONS — map raw scheduler text to short labels when known
+         ===================================================================== */
+      const FAILURE_RULES = [
+        [/session expired|ERR_SESSION_EXPIRED/i, "Session expired"],
+        [/connection refused|no such host|timeout|unreachable|dial tcp|EOF/i, "Publisher unreachable"],
+        [/not (on whatsapp|registered|exist)|invalid (jid|number)/i, "Number not on WhatsApp"],
+        [/unauthori[sz]ed|forbidden|\b401\b/i, "Publisher rejected credentials"],
+      ];
+      function failureLabel(reason) {
+        if (!reason) return "Failed";
+        const r = String(reason).trim();
+        const m = /^failed to send message after \d+ retries:\s*([\s\S]*)$/i.exec(r);
+        const inner = m ? m[1] : r;
+        for (const [re, label] of FAILURE_RULES) if (re.test(inner)) return label;
+        return capitalize(inner || r);
+      }
+      const retriedLabel = (n) => (n > 0 ? `retried ${n} ${n === 1 ? "time" : "times"}` : "");
+
+      /* =====================================================================
+         API — contract unchanged (docs/rest_api.md)
+         ===================================================================== */
+      class ApiError extends Error {
+        constructor(message, status, code) {
+          super(message);
+          this.status = status;
+          this.code = code;
         }
+      }
 
-        feather.replace();
+      const api = {
+        token: "",
+        async request(method, path, body, token) {
+          let res;
+          try {
+            res = await fetch(path, {
+              method,
+              headers: {
+                Authorization: `Basic ${token ?? this.token}`,
+                ...(body ? { "Content-Type": "application/json" } : {}),
+              },
+              body: body ? JSON.stringify(body) : undefined,
+            });
+          } catch {
+            throw new ApiError("Can't reach the server. Check your connection and try again.", 0);
+          }
+          let data = null;
+          try { data = await res.json(); } catch {}
+          if (!res.ok || !data || data.ok === false) {
+            throw new ApiError(capitalize(data?.msg) || `Request failed (HTTP ${res.status}).`, res.status, data?.err);
+          }
+          return data;
+        },
+        check(token) { return this.request("GET", "/check", null, token); },
+        messages(status) {
+          return this.request("GET", status ? `/messages?status=${encodeURIComponent(status)}` : "/messages");
+        },
+        schedule(payload) { return this.request("POST", "/messages", payload); },
+        retry(id, scheduledSendingAt) {
+          return this.request("POST", `/messages/${encodeURIComponent(id)}/retry`, { scheduled_sending_at: scheduledSendingAt });
+        },
       };
 
-      // Initialize recipients multi-select
-      function initRecipientsSelect() {
-        if (choices) {
-          return;
-        }
-
-        const recipientsSelect = document.getElementById("recipients");
-        choices = new Choices(recipientsSelect, {
-          classNames: {
-            containerOuter: ["choices", "w-full", "mb-0"],
+      /* =====================================================================
+         COMPONENTS — toasts, interim recipient select
+         ===================================================================== */
+      document.addEventListener("alpine:init", () => {
+        Alpine.store("toasts", {
+          items: [],
+          seq: 0,
+          push(message, type = "success", timeout = 4500) {
+            const id = ++this.seq;
+            this.items.push({ id, message, type });
+            setTimeout(() => this.dismiss(id), timeout);
           },
+          dismiss(id) {
+            this.items = this.items.filter((t) => t.id !== id);
+          },
+        });
+      });
+      const toast = (message, type) => Alpine.store("toasts").push(message, type);
+
+      // Third-party widget instances live outside Alpine's reactive state.
+      let recipientsSelect = null;
+      let composerPicker = null;
+      let retryPicker = null;
+
+      function ensureRecipientsSelect() {
+        if (recipientsSelect) return recipientsSelect;
+        recipientsSelect = new Choices(document.getElementById("composerRecipients"), {
           removeItemButton: true,
           allowHTML: false,
           placeholder: true,
-          placeholderValue: "e.g. 6281234567890 or 120363020892687891@g.us",
+          placeholderValue: "e.g. +62 812 3456 7890 or 1203…@g.us",
           addItems: true,
           addChoices: true,
+          duplicateItemsAllowed: false,
+          shouldSort: false,
+          itemSelectText: "",
         });
-
-        // Add default numbers
-        resetRecipientsSelect();
+        return recipientsSelect;
       }
 
-      function initRecipientsSelectItems() {
-        const items = [];
-        auth.defaultNumbers.forEach((number) => {
-          items.push({ value: number, label: number });
-        });
+      /* =====================================================================
+         PAGE — app (auth, routing, messages, modals)
+         ===================================================================== */
+      document.addEventListener("alpine:init", () => {
+        Alpine.data("app", () => ({
+          TZ_LABEL,
+          navItems: [
+            { route: "messages", label: "Messages", icon: "message-square" },
+            { route: "contacts", label: "Contacts", icon: "book" },
+            { route: "templates", label: "Templates", icon: "file-text" },
+          ],
+          placeholderPages: [
+            { route: "contacts", label: "Contacts", icon: "book" },
+            { route: "templates", label: "Templates", icon: "file-text" },
+          ],
+          statusTabs: [
+            { value: "", label: "All" },
+            { value: "scheduled", label: "Scheduled" },
+            { value: "sent", label: "Sent" },
+            { value: "failed", label: "Failed" },
+          ],
+          retryOptions: [
+            { value: "now", label: "Send now", hint: "Retry immediately.", icon: "zap" },
+            { value: "later", label: "Schedule for later", hint: "Pick a new send time.", icon: "clock" },
+          ],
 
-        return items;
-      }
+          // ---- state ----
+          booting: true,
+          authed: false,
+          username: "",
+          defaultNumbers: [],
+          login: { username: "", password: "", error: "", loading: false },
+          route: "messages",
+          now: nowTs(),
+          contacts: [],
+          templates: [],
 
-      function resetRecipientsSelect() {
-        choices.setChoices(initRecipientsSelectItems(), "value", "label", true);
-      }
+          all: [],
+          list: [],
+          status: "",
+          search: "",
+          page: 1,
+          pageSize: 10,
+          loading: false,
+          loadError: "",
+          loadedOnce: false,
+          loadSeq: 0,
 
-      // Event Listeners
-      document.addEventListener("DOMContentLoaded", () => {
-        initPage();
+          detail: null,
+          retry: { open: false, id: null, content: "", failure: "", mode: "now", time: "", error: "", loading: false },
+          composer: { open: false, content: "", time: "", errors: {}, loading: false },
 
-        // Initialize date pickers
-        initDatePicker("scheduledTime");
-        initDatePicker("retryScheduledTime");
+          // ---- lifecycle ----
+          async init() {
+            this.readHash();
+            window.addEventListener("hashchange", () => this.readHash());
+            setInterval(() => (this.now = nowTs()), 30000);
+            this.loadLocal();
+            window.addEventListener("storage", () => this.loadLocal());
 
-        // Login form submit
-        document
-          .getElementById("loginForm")
-          .addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const username = document.getElementById("username").value;
-            const password = document.getElementById("password").value;
+            this.$nextTick(() => {
+              composerPicker = initDatePicker(document.getElementById("composerTime"), (v) => (this.composer.time = v));
+              retryPicker = initDatePicker(document.getElementById("retryTime"), (v) => (this.retry.time = v));
+            });
 
-            const isAuthenticated = await checkAuth(username, password);
-            if (isAuthenticated) {
-              const username = (document.getElementById("username").value = "");
-              const password = (document.getElementById("password").value = "");
-
-              // Hide login error if shown
-              document.getElementById("loginError").classList.add("hidden");
-
-              hideLoginModal();
-
-              showDashboard();
-            } else {
-              document.getElementById("loginError").classList.remove("hidden");
+            const token = LS.raw("web_client_token");
+            if (!token) {
+              this.booting = false;
+              return;
             }
-          });
+            try {
+              const res = await api.check(token);
+              this.onAuthed(token, res.data);
+            } catch (e) {
+              if (e.status === 401) this.clearAuth();
+              else toast(e.message, "error");
+            } finally {
+              this.booting = false;
+            }
+          },
 
-        // Logout button
-        document.getElementById("logoutBtn").addEventListener("click", () => {
-          localStorage.setItem("web_client_token", "");
-          localStorage.setItem("web_client_default_numbers", []);
-          auth.token = null;
-          auth.defaultNumbers = [];
-          hideDashboard();
-          showLoginModal();
-        });
+          loadLocal() {
+            this.contacts = LS.json("wa_contacts", []);
+            this.templates = LS.json("wa_templates", []);
+          },
 
-        // Refresh button
-        document
-          .getElementById("refreshMessages")
-          .addEventListener("click", () => {
-            loadMessages();
-          });
+          // ---- auth ----
+          async submitLogin() {
+            const l = this.login;
+            l.error = "";
+            if (!l.username || !l.password) {
+              l.error = "Enter your username and password.";
+              return;
+            }
+            l.loading = true;
+            const token = utf8ToBase64(`${l.username}:${l.password}`);
+            try {
+              const res = await api.check(token);
+              l.password = "";
+              this.onAuthed(token, res.data);
+            } catch (e) {
+              l.error = e.status === 401 ? "Invalid username or password." : e.message;
+            } finally {
+              l.loading = false;
+            }
+          },
 
-        // Schedule form submit
-        document
-          .getElementById("scheduleForm")
-          .addEventListener("submit", async (e) => {
-            e.preventDefault();
+          onAuthed(token, data) {
+            api.token = token;
+            this.username = usernameFromToken(token);
+            this.defaultNumbers = data?.default_numbers || [];
+            LS.set("web_client_token", token);
+            LS.set("web_client_default_numbers", this.defaultNumbers);
+            this.authed = true;
+            this.refresh();
+          },
 
-            const recipientSelect = document.getElementById("recipients");
-            const recipientNumbers = Array.from(
-              recipientSelect.selectedOptions
-            ).map((option) => formatWhatsappNumber(option.value));
+          clearAuth() {
+            api.token = "";
+            LS.set("web_client_token", "");
+            LS.set("web_client_default_numbers", "[]");
+          },
 
-            const content = document.getElementById("messageContent").value;
+          logout(expired = false) {
+            this.clearAuth();
+            this.authed = false;
+            this.closeAll();
+            this.all = [];
+            this.list = [];
+            this.loadedOnce = false;
+            if (expired) toast("Your login has expired. Please log in again.", "info");
+          },
 
-            // Get scheduled time and convert to timestamp
-            const scheduledTimeStr =
-              document.getElementById("scheduledTime").value;
-            const scheduledDate = new Date(scheduledTimeStr);
-            const scheduledSendingAt = Math.floor(
-              scheduledDate.getTime() / 1000
+          handleError(e, fallback) {
+            if (e.status === 401) return this.logout(true);
+            toast(e.message || fallback, "error");
+          },
+
+          // ---- routing & keyboard ----
+          readHash() {
+            const r = location.hash.replace(/^#\/?/, "");
+            this.route = ["messages", "contacts", "templates"].includes(r) ? r : "messages";
+          },
+
+          navCount(route) {
+            if (route === "contacts") return this.contacts.length;
+            if (route === "templates") return this.templates.length;
+            return 0;
+          },
+
+          anyModalOpen() {
+            return this.composer.open || this.retry.open || !!this.detail;
+          },
+
+          closeAll() {
+            this.retry.open = false;
+            this.detail = null;
+            this.composer.open = false;
+          },
+
+          onKey(e) {
+            if (!this.authed) return;
+            if (e.key === "Escape") {
+              if (document.querySelector(".flatpickr-calendar.open")) return;
+              if (this.retry.open) this.closeRetry();
+              else if (this.detail) this.closeDetail();
+              else if (this.composer.open) this.closeComposer();
+              return;
+            }
+            const typing = e.target.closest?.("input, textarea, select, [contenteditable], .choices");
+            if (typing || e.ctrlKey || e.metaKey || e.altKey || this.anyModalOpen()) return;
+            if (e.key === "n" || e.key === "N") {
+              e.preventDefault();
+              this.openComposer();
+            } else if (e.key === "/") {
+              e.preventDefault();
+              location.hash = "#/messages";
+              this.$nextTick(() => this.$refs.search?.focus());
+            }
+          },
+
+          // ---- messages ----
+          async refresh() {
+            const seq = ++this.loadSeq;
+            this.loading = true;
+            this.loadError = "";
+            try {
+              const [allRes, listRes] = await Promise.all([
+                api.messages(""),
+                this.status ? api.messages(this.status) : null,
+              ]);
+              if (seq !== this.loadSeq) return;
+              this.all = sortMessages(allRes.data || []);
+              this.list = listRes ? sortMessages(listRes.data || []) : this.all;
+              this.loadedOnce = true;
+              if (this.page > this.pageCount()) this.page = this.pageCount();
+            } catch (e) {
+              if (seq !== this.loadSeq) return;
+              if (e.status === 401) return this.logout(true);
+              this.loadError = e.message;
+            } finally {
+              if (seq === this.loadSeq) this.loading = false;
+            }
+          },
+
+          setStatus(value) {
+            location.hash = "#/messages";
+            if (this.status === value && this.list.length) return;
+            this.status = value;
+            this.page = 1;
+            this.list = [];
+            this.refresh();
+          },
+
+          counts() {
+            const c = { all: this.all.length, scheduled: 0, sent: 0, failed: 0 };
+            for (const m of this.all) if (m.status in c) c[m.status]++;
+            return c;
+          },
+
+          nextScheduled() {
+            let next = null;
+            for (const m of this.all) {
+              if (m.status === "scheduled" && (!next || m.scheduled_sending_at < next.scheduled_sending_at)) next = m;
+            }
+            return next;
+          },
+
+          lastSentAt() {
+            let last = 0;
+            for (const m of this.all) if (m.sent_at && m.sent_at > last) last = m.sent_at;
+            return last;
+          },
+
+          sessionExpiredCount() {
+            return this.all.filter((m) => m.status === "failed" && failureLabel(m.reason) === "Session expired").length;
+          },
+
+          filtered() {
+            const q = this.search.trim().toLowerCase();
+            if (!q) return this.list;
+            return this.list.filter(
+              (m) =>
+                m.content.toLowerCase().includes(q) ||
+                m.recipient_numbers.some((r) => r.toLowerCase().includes(q) || this.displayRecipient(r).toLowerCase().includes(q))
             );
+          },
 
-            if (recipientNumbers.length === 0) {
-              showToast("Please select at least one recipient", "error")
-              return;
-            }
+          pageCount() {
+            return Math.max(1, Math.ceil(this.filtered().length / this.pageSize));
+          },
+          paged() {
+            const start = (this.page - 1) * this.pageSize;
+            return this.filtered().slice(start, start + this.pageSize);
+          },
+          rangeFrom() {
+            return (this.page - 1) * this.pageSize + 1;
+          },
+          rangeTo() {
+            return Math.min(this.page * this.pageSize, this.filtered().length);
+          },
 
-            if (!content) {
-              showToast("Please enter a message content", "error")
-              return;
-            }
+          emptyText() {
+            if (this.search) return `No messages match “${this.search.trim()}”.`;
+            return {
+              "": "No messages yet. Schedule your first one.",
+              scheduled: "Nothing is scheduled right now.",
+              sent: "No messages have been sent yet.",
+              failed: "No failed messages. Everything went out.",
+            }[this.status];
+          },
 
-            if (isNaN(scheduledSendingAt)) {
-              showToast("Please select a valid date and time", "error")
-              return;
-            }
+          // ---- display helpers ----
+          icon,
+          fmtDate,
+          fmtTime,
+          fmtWhen,
+          fmtWhenCompact,
+          fmtFull,
+          fmtUtc,
+          capitalize,
+          plural,
+          oneLine,
+          initialOf,
+          isGroup,
+          failureLabel,
+          retriedLabel,
 
-            const success = await scheduleMessage(
-              recipientNumbers,
-              content,
-              scheduledSendingAt
+          rel(ts) {
+            return fmtRelative(ts, this.now);
+          },
+          fmtShortIn(ts) {
+            return fmtShortIn(ts, this.now);
+          },
+          sendTimeOf(m) {
+            return m.status === "sent" && m.sent_at ? m.sent_at : m.scheduled_sending_at;
+          },
+          sendSummary(ts) {
+            return `Sends ${fmtFull(ts)} · ${fmtRelative(ts, this.now)} · ${fmtUtc(ts)}`;
+          },
+          statusLabel(s) {
+            return { scheduled: "Scheduled", sent: "Sent", failed: "Failed" }[s] || capitalize(s);
+          },
+          badgeClass(s) {
+            return { scheduled: "badge-scheduled", sent: "badge-sent", failed: "badge-failed" }[s] || "";
+          },
+          failureLine(m) {
+            return [failureLabel(m.reason), retriedLabel(m.retried_count)].filter(Boolean).join(" · ");
+          },
+          displayRecipient(jid) {
+            if (!jid) return "";
+            const c = this.contacts.find((x) => x.jid === jid);
+            if (c?.name) return c.name;
+            const id = jid.split("@")[0];
+            if (isGroup(jid)) return `Group …${id.slice(-4)}`;
+            return /^\d+$/.test(id) ? formatPhone(id) : jid;
+          },
+          copyText(text, done) {
+            if (!navigator.clipboard) return toast("Copy isn't available here. Select the text and copy it manually.", "error");
+            navigator.clipboard.writeText(text).then(
+              () => toast(done, "info"),
+              () => toast("Couldn't copy. Select the text and copy it manually.", "error")
             );
-            if (success) {
-              showToast("Message scheduled successfully")
+          },
 
-              document.getElementById("scheduleForm").reset();
-              choices.removeActiveItems();
+          // ---- detail ----
+          openDetail(m) {
+            this.detail = m;
+          },
+          closeDetail() {
+            this.detail = null;
+          },
+          duplicate(m) {
+            this.detail = null;
+            this.openComposer({ content: m.content, recipients: m.recipient_numbers });
+          },
 
-              await loadMessages();
-            } else {
-              showToast("Failed to schedule message", "error")
+          // ---- retry ----
+          openRetry(m) {
+            this.detail = null;
+            Object.assign(this.retry, {
+              open: true,
+              id: m.id,
+              content: m.content,
+              failure: this.failureLine(m),
+              mode: "now",
+              time: "",
+              error: "",
+              loading: false,
+            });
+            retryPicker?.clear();
+          },
+          closeRetry() {
+            this.retry.open = false;
+          },
+          retryTs() {
+            const ts = parseJakartaInput(this.retry.time);
+            return isNaN(ts) ? 0 : ts;
+          },
+          async submitRetry() {
+            const r = this.retry;
+            r.error = "";
+            let ts = nowTs();
+            if (r.mode === "later") {
+              ts = parseJakartaInput(r.time);
+              if (!r.time) return (r.error = "Pick a new send time.");
+              if (isNaN(ts)) return (r.error = "Pick a valid date and time.");
+              if (ts < nowTs() - 60) return (r.error = "This time has already passed. Pick a time in the future.");
             }
-          });
-
-        // Close message detail modal
-        document
-          .getElementById("closeDetailModal")
-          .addEventListener("click", () => {
-            document
-              .getElementById("messageDetailModal")
-              .classList.add("hidden");
-          });
-
-        // Switch retry mode
-        document
-          .getElementById("retryImmediateBtn")
-          .addEventListener("click", () =>
-            updateRetryType(IMMEDIATE_RETRY_TYPE)
-          );
-        document
-          .getElementById("retryScheduledBtn")
-          .addEventListener("click", () =>
-            updateRetryType(SCHEDULED_RETRY_TYPE)
-          );
-
-        // Close retry modal
-        document
-          .getElementById("closeRetryModalBtn")
-          .addEventListener("click", () => {
-            hideRetryModal();
-          });
-
-        document
-          .getElementById("cancelRetryBtn")
-          .addEventListener("click", () => {
-            hideRetryModal();
-          });
-
-        // Retry form submit
-        document
-          .getElementById("retryForm")
-          .addEventListener("submit", async (e) => {
-            e.preventDefault();
-
-            const messageId = document.getElementById("retryMessageId").value;
-            const scheduledTimeStr =
-              document.getElementById("retryScheduledTime").value;
-
-            let scheduledSendingAt = null;
-            if (retryType == IMMEDIATE_RETRY_TYPE) {
-              const scheduledDate = new Date();
-              scheduledSendingAt = Math.floor(scheduledDate.getTime() / 1000);
+            r.loading = true;
+            try {
+              await api.retry(r.id, ts);
+              toast(r.mode === "later" ? `Retry scheduled for ${fmtWhen(ts)} (GMT+7).` : "Retry queued. The message will be sent shortly.");
+              this.closeRetry();
+              await this.refresh();
+            } catch (e) {
+              this.handleError(e, "Couldn't retry the message.");
+            } finally {
+              r.loading = false;
             }
+          },
 
-            if (scheduledTimeStr && retryType == SCHEDULED_RETRY_TYPE) {
-              const scheduledDate = new Date(scheduledTimeStr);
-              scheduledSendingAt = Math.floor(scheduledDate.getTime() / 1000);
+          // ---- composer (interim) ----
+          openComposer(prefill = {}) {
+            Object.assign(this.composer, { open: true, content: prefill.content || "", time: "", errors: {}, loading: false });
+            this.$nextTick(() => {
+              const sel = ensureRecipientsSelect();
+              const picked = prefill.recipients || [];
+              sel.removeActiveItems();
+              const values = [...new Set([...this.defaultNumbers, ...picked])];
+              sel.setChoices(values.map((v) => ({ value: v, label: v })), "value", "label", true);
+              picked.forEach((v) => sel.setChoiceByValue(v));
+              composerPicker?.clear();
+            });
+          },
+          closeComposer() {
+            this.composer.open = false;
+          },
+          composerTs() {
+            const ts = parseJakartaInput(this.composer.time);
+            return isNaN(ts) ? 0 : ts;
+          },
+          async submitComposer() {
+            const c = this.composer;
+            const errors = {};
 
-              // Check if scheduled time is in the past
-              if (scheduledSendingAt < Math.floor(Date.now() / 1000)) {
-                showToast("Scheduled time cannot be in the past", "error")
-                return;
-              }
+            const raw = ensureRecipientsSelect().getValue(true);
+            const recipients = [];
+            for (const r of raw) {
+              const n = normalizeRecipient(r);
+              if (n.ok) recipients.push(n.jid);
+              else if (!errors.recipients) errors.recipients = n.error;
             }
+            if (!raw.length) errors.recipients = "Add at least one recipient: type a number with country code and press Enter.";
 
-            const success = await retryMessage(messageId, scheduledSendingAt);
-            if (success) {
-              showToast("Message retry scheduled successfully")
-              document.getElementById("retryModal").classList.add("hidden");
-              await loadMessages();
-            } else {
-              showToast("Failed to schedule message retry", "error")
+            if (!c.content.trim()) errors.content = "Write a message before scheduling.";
+
+            const ts = parseJakartaInput(c.time);
+            if (!c.time) errors.time = "Pick a send time.";
+            else if (isNaN(ts)) errors.time = "Pick a valid date and time.";
+            else if (ts < nowTs() - 60) errors.time = "This time has already passed. Pick a time in the future.";
+
+            c.errors = errors;
+            if (Object.keys(errors).length) return;
+
+            c.loading = true;
+            try {
+              await api.schedule({
+                recipient_numbers: [...new Set(recipients)],
+                content: c.content,
+                scheduled_sending_at: ts,
+              });
+              toast(`Message scheduled for ${fmtWhen(ts)} (GMT+7).`);
+              this.closeComposer();
+              await this.refresh();
+            } catch (e) {
+              this.handleError(e, "Couldn't schedule the message.");
+            } finally {
+              c.loading = false;
             }
-
-            updateRetryType(IMMEDIATE_RETRY_TYPE);
-          });
+          },
+        }));
       });
+
+      function sortMessages(messages) {
+        return [...messages].sort((a, b) => b.scheduled_sending_at - a.scheduled_sending_at);
+      }
     </script>
+
+    <!-- Alpine (plugins first, then core) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3.14.9/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
   </body>
 </html>
