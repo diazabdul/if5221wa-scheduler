@@ -512,7 +512,7 @@
             </div>
 
             <!-- Table -->
-            <div class="overflow-x-auto max-md:hidden">
+            <div class="relative overflow-x-auto max-md:hidden">
               <table class="w-full min-w-[900px] table-fixed border-t border-line text-left md:max-lg:min-w-0">
                 <thead class="bg-subtle">
                   <tr class="border-b border-line text-caption font-semibold text-ink-muted">
@@ -726,7 +726,7 @@
               </template>
             </ul>
 
-            <div class="overflow-x-auto max-md:hidden" x-show="filteredContacts().length">
+            <div class="relative overflow-x-auto max-md:hidden" x-show="filteredContacts().length">
               <table class="w-full min-w-[760px] table-fixed border-t border-line text-left md:max-lg:min-w-0">
                 <thead class="bg-subtle">
                   <tr class="border-b border-line text-caption font-semibold text-ink-muted">
@@ -1257,7 +1257,7 @@
                     readonly
                   />
                 </div>
-                <div class="flex flex-wrap gap-1.5 px-1.5 max-md:order-first max-md:w-full max-md:gap-2 max-md:px-0">
+                <div class="flex flex-wrap gap-1.5 px-1.5 max-md:order-first max-md:w-full max-md:gap-2 max-md:px-0 md:max-lg:w-full md:max-lg:px-0">
                   <template x-for="p in presets" :key="p.key">
                     <button
                       type="button"
@@ -2285,7 +2285,7 @@
           onKey(e) {
             if (!this.authed) return;
             if (e.key === "Escape") {
-              if (document.querySelector(".flatpickr-calendar.open") || Date.now() - pickerClosedAt < 300) return;
+              if (document.querySelector(".flatpickr-calendar.open") || Date.now() - pickerClosedAt < 50) return;
               if (this.confirm.open) this.resolveConfirm(false);
               else if (this.drawerOpen) this.drawerOpen = false;
               else if (this.templateMenuOpen) this.templateMenuOpen = false;
