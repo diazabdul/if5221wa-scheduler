@@ -1,0 +1,44 @@
+[x-cloak] { display: none !important; }
+
+/* flatpickr restyle (tokens) */
+.flatpickr-calendar { font-family: Inter, system-ui, sans-serif; border-radius: 12px; box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.18); }
+.flatpickr-wrapper { display: block; width: 100%; }
+.flatpickr-calendar.static { top: calc(100% + 4px); z-index: 10; }
+@media (max-width: 640px) {
+  .flatpickr-calendar.static.open {
+    position: fixed;
+    top: auto !important;
+    left: 50% !important;
+    bottom: calc(88px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 60;
+  }
+}
+.flatpickr-day.selected, .flatpickr-day.selected:hover { background: #0f7b6c; border-color: #0f7b6c; }
+.flatpickr-day.today { border-color: #0f7b6c; }
+.flatpickr-day.today:hover { background: #e6f4f1; color: #0f7b6c; }
+
+/* WhatsApp preview bubble */
+.wa-bubble strong { font-weight: 700; }
+.wa-quote { border-left: 3px solid rgba(17, 24, 39, 0.25); padding-left: 8px; color: #4b5563; }
+.wa-li { display: flex; gap: 6px; }
+.wa-mono { display: block; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.wa-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background: rgba(17, 24, 39, 0.06); border-radius: 3px; padding: 0 3px; }
+.wa-link { color: #027eb5; text-decoration: underline; word-break: break-all; }
+
+/* emoji-picker-element theme (tokens) */
+emoji-picker {
+  --background: #ffffff;
+  --border-color: transparent;
+  --indicator-color: #0f7b6c;
+  --outline-color: #0f7b6c;
+  --input-border-radius: 8px;
+  --input-border-color: #cbd2da;
+  --button-hover-background: #e6f4f1;
+  --button-active-background: #e6f4f1;
+  --num-columns: 8;
+  height: 320px;
+}
+@media (max-width: 640px) {
+  emoji-picker { width: 100%; --num-columns: 7; }
+}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ghazlabs/wa-scheduler/internal/core"
@@ -128,6 +130,54 @@ func TestGetAllMessages(t *testing.T) {
 					assert.Equal(t, tc.expectedMsgStatus, msg["status"])
 				}
 			}
+		})
+	}
+}
+
+func TestServeWebFrontendAssets(t *testing.T) {
+	webDir := t.TempDir()
+	assetsDir := filepath.Join(webDir, "assets")
+	if err := os.Mkdir(assetsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	files := map[string]string{
+		filepath.Join(webDir, "index.html"):   `<script src="/assets/app.js"></script><link rel="stylesheet" href="/assets/app.css">`,
+		filepath.Join(assetsDir, "app.js"):    "window.previewReady = true;",
+		filepath.Join(assetsDir, "shared.js"): "window.sharedReady = true;",
+		filepath.Join(assetsDir, "app.css"):   "body { color: green; }",
+	}
+	for path, contents := range files {
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	api, err := NewAPI(APIConfig{
+		Service:            &mockService{},
+		ClientUsername:     "admin",
+		ClientPassword:     "admin",
+		WebClientPublicDir: webDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range []struct {
+		path string
+		want string
+	}{
+		{path: "/", want: `/assets/app.js`},
+		{path: "/assets/app.js", want: "window.previewReady = true;"},
+		{path: "/assets/shared.js", want: "window.sharedReady = true;"},
+		{path: "/assets/app.css", want: "body { color: green; }"},
+	} {
+		t.Run(testCase.path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			api.GetHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, testCase.path, nil))
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), testCase.want)
 		})
 	}
 }

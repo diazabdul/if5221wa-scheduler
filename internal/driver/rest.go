@@ -44,6 +44,8 @@ func (a *API) GetHandler() http.Handler {
 	r.Use(middleware.Recoverer)
 
 	r.Get("/", a.serveWebFrontend)
+	assetsDir := filepath.Join(a.WebClientPublicDir, "assets")
+	r.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(http.Dir(assetsDir))))
 	r.Group(func(r chi.Router) {
 		r.Use(BasicAuth(a.ClientUsername, a.ClientPassword))
 		r.Use(render.SetContentType(render.ContentTypeJSON))
